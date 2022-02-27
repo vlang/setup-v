@@ -32,8 +32,9 @@ async function run(): Promise<void> {
       arch = os.arch()
     }
 
-    const token = core.getInput('token')
-    const authToken = !token || isGhes() ? undefined : `token ${token}`
+    const token = core.getInput('token', {required: true})
+    void isGhes
+    const authToken = token // !token || isGhes() ? undefined : `${token}`
     const stable = (core.getInput('stable') || 'true').toUpperCase() === 'TRUE'
     const checkLatest =
       (core.getInput('check-latest') || 'false').toUpperCase() === 'TRUE'

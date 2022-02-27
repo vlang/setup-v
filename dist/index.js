@@ -303,8 +303,9 @@ function run() {
             if (!arch) {
                 arch = os_1.default.arch();
             }
-            const token = core.getInput('token');
-            const authToken = !token || isGhes() ? undefined : `token ${token}`;
+            const token = core.getInput('token', { required: true });
+            void isGhes;
+            const authToken = token; // !token || isGhes() ? undefined : `${token}`
             const stable = (core.getInput('stable') || 'true').toUpperCase() === 'TRUE';
             const checkLatest = (core.getInput('check-latest') || 'false').toUpperCase() === 'TRUE';
             const binPath = yield installer.getVlang(version, stable, checkLatest, authToken, arch);
