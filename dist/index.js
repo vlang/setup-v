@@ -53,6 +53,11 @@ function downloadRepository(authToken, owner, repo, ref, commit, repositoryPath)
             core.info('Determining the default branch');
             ref = yield getDefaultBranch(authToken, owner, repo);
         }
+        // create directory if not exists
+        if (!fs.existsSync(repositoryPath)) {
+            core.info(`Creating directory: ${repositoryPath}`);
+            fs.mkdirSync(repositoryPath, { recursive: true });
+        }
         // Download the archive
         let archiveData = yield retryHelper.execute(() => __awaiter(this, void 0, void 0, function* () {
             core.info('Downloading the archive');
