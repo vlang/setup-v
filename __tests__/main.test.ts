@@ -18,6 +18,4 @@ test('wait 500 ms', async () => {
 })
 
 // shows how the runner will run a javascript action with env / stdout protocol
-test('test runs', () => {
-  
-})
+test('test runs', () => {})
