@@ -24,6 +24,12 @@ export async function downloadRepository(
     ref = await getDefaultBranch(authToken, owner, repo)
   }
 
+  // create directory if not exists
+  if (!fs.existsSync(repositoryPath)) {
+    core.info(`Creating directory: ${repositoryPath}`)
+    fs.mkdirSync(repositoryPath, {recursive: true})
+  }
+
   // Download the archive
   let archiveData = await retryHelper.execute(async () => {
     core.info('Downloading the archive')
