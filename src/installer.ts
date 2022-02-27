@@ -1,14 +1,42 @@
-import os from 'os'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import {downloadRepository} from './github-api-helper'
+
+const VLANG_GITHUB_OWNER = 'vlang'
+const VLANG_GITHUB_REPO = 'v'
 
 export async function getVlang(
   versionSpec: string,
   stable: boolean,
   checkLatest: boolean,
-  auth: string | undefined,
+  authToken = '',
   arch: string = os.arch()
 ): Promise<string> {
-  let osPlat: string = os.platform()
-  let osArch: string = translateArchToDistUrl(arch)
+  const osPlat: string = os.platform()
+  const osArch: string = translateArchToDistUrl(arch)
+
+  const repositoryPath = path.join(
+    process.env.GITHUB_WORKSPACE!,
+    'vlang',
+    `v${versionSpec}`,
+    `vlang_${osPlat}_${osArch}`
+  )
+
+  if (fs.existsSync(repositoryPath)) {
+    return repositoryPath
+  }
+
+  if (checkLatest) {
+    await downloadRepository(
+      authToken,
+      VLANG_GITHUB_OWNER,
+      VLANG_GITHUB_REPO,
+      '',
+      '',
+      repositoryPath
+    )
+  }
 
   return ''
 }

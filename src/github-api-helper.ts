@@ -72,6 +72,22 @@ export async function downloadRepository(
   await io.rmRF(extractPath)
 }
 
+export async function getLatestRelease(
+  authToken: string,
+  owner: string,
+  repo: string
+): Promise<string> {
+  const octokit = github.getOctokit(authToken)
+  const params = {
+    owner,
+    repo
+  }
+
+  const response = await octokit.rest.repos.getLatestRelease(params)
+
+  return response.data.tag_name
+}
+
 /**
  * Looks up the default branch name
  */

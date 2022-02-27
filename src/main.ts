@@ -33,7 +33,7 @@ async function run(): Promise<void> {
     }
 
     const token = core.getInput('token')
-    const auth = !token || isGhes() ? undefined : `token ${token}`
+    const authToken = !token || isGhes() ? undefined : `token ${token}`
     const stable = (core.getInput('stable') || 'true').toUpperCase() === 'TRUE'
     const checkLatest =
       (core.getInput('check-latest') || 'false').toUpperCase() === 'TRUE'
@@ -41,7 +41,7 @@ async function run(): Promise<void> {
       version,
       stable,
       checkLatest,
-      auth,
+      authToken,
       arch
     )
 
