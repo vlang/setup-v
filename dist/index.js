@@ -211,6 +211,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getVlang = void 0;
+const core = __importStar(__nccwpck_require__(2186));
 const fs = __importStar(__nccwpck_require__(5747));
 const os = __importStar(__nccwpck_require__(2087));
 const path = __importStar(__nccwpck_require__(5622));
@@ -229,6 +230,14 @@ function getVlang(versionSpec, stable, checkLatest, authToken = '', arch = os.ar
         if (checkLatest) {
             yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, '', '', repositoryPath);
         }
+        fs.readdir(repositoryPath, function (err, files) {
+            if (err) {
+                return core.warning(`Unable to scan directory: ${err}`);
+            }
+            for (const file of files) {
+                core.info(file);
+            }
+        });
         return binPath;
     });
 }
