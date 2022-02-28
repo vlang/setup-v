@@ -46,7 +46,7 @@ const retryHelper = __importStar(__nccwpck_require__(2155));
 const toolCache = __importStar(__nccwpck_require__(7784));
 const uuid_1 = __nccwpck_require__(5840);
 const IS_WINDOWS = process.platform === 'win32';
-function downloadRepository(authToken, owner, repo, ref, commit, repositoryPath) {
+function downloadRepository(authToken, owner, repo, repositoryPath, ref, commit) {
     return __awaiter(this, void 0, void 0, function* () {
         // Determine the default branch
         if (!ref && !commit) {
@@ -154,7 +154,7 @@ function getDefaultBranch(authToken, owner, repo) {
     });
 }
 exports.getDefaultBranch = getDefaultBranch;
-function downloadArchive(authToken, owner, repo, ref, commit) {
+function downloadArchive(authToken, owner, repo, ref = '', commit = '') {
     return __awaiter(this, void 0, void 0, function* () {
         const octokit = github.getOctokit(authToken);
         const params = {
@@ -219,18 +219,22 @@ const github_api_helper_1 = __nccwpck_require__(138);
 const child_process_1 = __nccwpck_require__(3129);
 const VLANG_GITHUB_OWNER = 'vlang';
 const VLANG_GITHUB_REPO = 'v';
-function getVlang(versionSpec, stable, checkLatest, authToken = '', arch = os.arch()) {
+function getVlang({ authToken, version, checkLatest, ref, commit, arch = os.arch() }) {
     return __awaiter(this, void 0, void 0, function* () {
         const osPlat = os.platform();
         const osArch = translateArchToDistUrl(arch);
-        const repositoryPath = path.join(process.env.GITHUB_WORKSPACE, 'vlang', `v${versionSpec}`, `vlang_${osPlat}_${osArch}`);
+        const repositoryPath = path.join(process.env.GITHUB_WORKSPACE, 'vlang', `v${version}`, `vlang_${osPlat}_${osArch}`);
         const vBinPath = path.join(repositoryPath, 'v');
         if (fs.existsSync(repositoryPath)) {
             return repositoryPath;
         }
+        let nextRef = ref;
+        let nextCommit = commit;
         if (checkLatest) {
-            yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, '', '', repositoryPath);
+            nextRef = '';
+            nextCommit = '';
         }
+        yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, repositoryPath, nextRef, nextCommit);
         if (!fs.existsSync(vBinPath)) {
             core.info('Running make...');
             (0, child_process_1.execSync)(`make`, { cwd: repositoryPath });
@@ -287,14 +291,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getVersion = exports.execer = void 0;
+exports.execer = void 0;
 const core = __importStar(__nccwpck_require__(2186));
 const cp = __importStar(__nccwpck_require__(3129));
 const installer = __importStar(__nccwpck_require__(1480));
 const path = __importStar(__nccwpck_require__(5622));
 const tc = __importStar(__nccwpck_require__(7784));
 const util = __importStar(__nccwpck_require__(1669));
-const url_1 = __nccwpck_require__(8835);
 const fs_1 = __importDefault(__nccwpck_require__(5747));
 const os_1 = __importDefault(__nccwpck_require__(2087));
 exports.execer = util.promisify(cp.exec);
@@ -307,21 +310,29 @@ function run() {
             //
             const version = resolveVersionInput();
             let arch = core.getInput('architecture');
-            // if architecture supplied but node-version is not
+            // if architecture supplied but version is not
             // if we don't throw a warning, the already installed x64 node will be used which is not probably what user meant.
             if (arch && !version) {
-                core.warning('`architecture` is provided but `node-version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `node-version`');
+                core.warning('`architecture` is provided but `version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `version`');
             }
             if (!arch) {
                 arch = os_1.default.arch();
             }
             const token = core.getInput('token', { required: true });
-            void isGhes;
-            const authToken = token; // !token || isGhes() ? undefined : `${token}`
-            const stable = (core.getInput('stable') || 'true').toUpperCase() === 'TRUE';
-            const checkLatest = (core.getInput('check-latest') || 'false').toUpperCase() === 'TRUE';
-            const binPath = yield installer.getVlang(version, stable, checkLatest, authToken, arch);
-            core.info('Adding v to the cache..');
+            const stable = strToBoolean(core.getInput('stable') || 'true');
+            const ref = core.getInput('ref');
+            const commit = core.getInput('commit');
+            const checkLatest = strToBoolean(core.getInput('check-latest') || 'false');
+            const binPath = yield installer.getVlang({
+                authToken: token,
+                version,
+                stable,
+                checkLatest,
+                ref,
+                commit,
+                arch
+            });
+            core.info('Adding v to the cache...');
             const installedVersion = yield getVersion(binPath);
             const cachedPath = yield tc.cacheDir(binPath, 'v', installedVersion);
             core.info(`Cached v to: ${cachedPath}`);
@@ -332,10 +343,6 @@ function run() {
                 core.setFailed(error.message);
         }
     });
-}
-function isGhes() {
-    const ghUrl = new url_1.URL(process.env['GITHUB_SERVER_URL'] || 'https://github.com');
-    return ghUrl.hostname.toUpperCase() !== 'GITHUB.COM';
 }
 function resolveVersionInput() {
     let version = core.getInput('version');
@@ -363,6 +370,10 @@ function parseVersionFile(contents) {
     }
     return version;
 }
+function strToBoolean(str) {
+    const falsyValues = ['false', 'no', '0', '', 'undefined', 'null'];
+    return !falsyValues.includes(str.toLowerCase());
+}
 function getVersion(binPath) {
     return __awaiter(this, void 0, void 0, function* () {
         const vBinPath = path.join(binPath, 'v');
@@ -377,7 +388,6 @@ function getVersion(binPath) {
         return '0.0.0';
     });
 }
-exports.getVersion = getVersion;
 run();
 
 
@@ -419,6 +429,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.execute = exports.RetryHelper = void 0;
 const core = __importStar(__nccwpck_require__(2186));
+const wait_1 = __nccwpck_require__(5817);
 const defaultMaxAttempts = 3;
 const defaultMinSeconds = 10;
 const defaultMaxSeconds = 20;
@@ -460,7 +471,7 @@ class RetryHelper {
     }
     sleep(seconds) {
         return __awaiter(this, void 0, void 0, function* () {
-            return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+            yield (0, wait_1.wait)(seconds * 1000);
         });
     }
 }
@@ -472,6 +483,37 @@ function execute(action) {
     });
 }
 exports.execute = execute;
+
+
+/***/ }),
+
+/***/ 5817:
+/***/ (function(__unused_webpack_module, exports) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.wait = void 0;
+function wait(milliseconds) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise(resolve => {
+            if (isNaN(milliseconds)) {
+                throw new Error('milliseconds not a number');
+            }
+            setTimeout(() => resolve('done!'), milliseconds);
+        });
+    });
+}
+exports.wait = wait;
 
 
 /***/ }),

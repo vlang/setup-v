@@ -14,9 +14,9 @@ export async function downloadRepository(
   authToken: string,
   owner: string,
   repo: string,
-  ref: string,
-  commit: string,
-  repositoryPath: string
+  repositoryPath: string,
+  ref?: string,
+  commit?: string
 ): Promise<void> {
   // Determine the default branch
   if (!ref && !commit) {
@@ -142,8 +142,8 @@ async function downloadArchive(
   authToken: string,
   owner: string,
   repo: string,
-  ref: string,
-  commit: string
+  ref = '',
+  commit = ''
 ): Promise<Buffer> {
   const octokit = github.getOctokit(authToken)
   const params = {

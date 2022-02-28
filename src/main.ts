@@ -4,7 +4,6 @@ import * as installer from './installer'
 import * as path from 'path'
 import * as tc from '@actions/tool-cache'
 import * as util from 'util'
-import {URL} from 'url'
 import fs from 'fs'
 import os from 'os'
 
@@ -20,11 +19,11 @@ async function run(): Promise<void> {
 
     let arch = core.getInput('architecture')
 
-    // if architecture supplied but node-version is not
+    // if architecture supplied but version is not
     // if we don't throw a warning, the already installed x64 node will be used which is not probably what user meant.
     if (arch && !version) {
       core.warning(
-        '`architecture` is provided but `node-version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `node-version`'
+        '`architecture` is provided but `version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `version`'
       )
     }
 
@@ -33,20 +32,22 @@ async function run(): Promise<void> {
     }
 
     const token = core.getInput('token', {required: true})
-    void isGhes
-    const authToken = token // !token || isGhes() ? undefined : `${token}`
-    const stable = (core.getInput('stable') || 'true').toUpperCase() === 'TRUE'
-    const checkLatest =
-      (core.getInput('check-latest') || 'false').toUpperCase() === 'TRUE'
-    const binPath = await installer.getVlang(
+    const stable = strToBoolean(core.getInput('stable') || 'true')
+    const ref = core.getInput('ref')
+    const commit = core.getInput('commit')
+    const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
+
+    const binPath = await installer.getVlang({
+      authToken: token,
       version,
       stable,
       checkLatest,
-      authToken,
+      ref,
+      commit,
       arch
-    )
+    })
 
-    core.info('Adding v to the cache..')
+    core.info('Adding v to the cache...')
     const installedVersion = await getVersion(binPath)
     const cachedPath = await tc.cacheDir(binPath, 'v', installedVersion)
     core.info(`Cached v to: ${cachedPath}`)
@@ -55,13 +56,6 @@ async function run(): Promise<void> {
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
   }
-}
-
-function isGhes(): boolean {
-  const ghUrl = new URL(
-    process.env['GITHUB_SERVER_URL'] || 'https://github.com'
-  )
-  return ghUrl.hostname.toUpperCase() !== 'GITHUB.COM'
 }
 
 function resolveVersionInput(): string {
@@ -104,7 +98,13 @@ function parseVersionFile(contents: string): string {
   return version
 }
 
-export async function getVersion(binPath: string): Promise<string> {
+function strToBoolean(str: string): boolean {
+  const falsyValues = ['false', 'no', '0', '', 'undefined', 'null']
+
+  return !falsyValues.includes(str.toLowerCase())
+}
+
+async function getVersion(binPath: string): Promise<string> {
   const vBinPath = path.join(binPath, 'v')
 
   const {stdout, stderr} = await execer(`${vBinPath} version`)

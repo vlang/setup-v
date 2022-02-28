@@ -1,4 +1,5 @@
 import * as core from '@actions/core'
+import {wait} from './wait'
 
 const defaultMaxAttempts = 3
 const defaultMinSeconds = 10
@@ -52,7 +53,7 @@ export class RetryHelper {
   }
 
   private async sleep(seconds: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, seconds * 1000))
+    await wait(seconds * 1000)
   }
 }
 

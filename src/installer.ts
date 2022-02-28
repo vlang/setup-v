@@ -8,20 +8,31 @@ import {execSync} from 'child_process'
 const VLANG_GITHUB_OWNER = 'vlang'
 const VLANG_GITHUB_REPO = 'v'
 
-export async function getVlang(
-  versionSpec: string,
-  stable: boolean,
-  checkLatest: boolean,
-  authToken = '',
-  arch: string = os.arch()
-): Promise<string> {
+export interface GetVlangRequest {
+  authToken: string
+  version: string
+  stable: boolean
+  checkLatest: boolean
+  ref?: string
+  commit?: string
+  arch?: string
+}
+
+export async function getVlang({
+  authToken,
+  version,
+  checkLatest,
+  ref,
+  commit,
+  arch = os.arch()
+}: GetVlangRequest): Promise<string> {
   const osPlat: string = os.platform()
   const osArch: string = translateArchToDistUrl(arch)
 
   const repositoryPath = path.join(
     process.env.GITHUB_WORKSPACE!,
     'vlang',
-    `v${versionSpec}`,
+    `v${version}`,
     `vlang_${osPlat}_${osArch}`
   )
 
@@ -31,16 +42,22 @@ export async function getVlang(
     return repositoryPath
   }
 
+  let nextRef = ref
+  let nextCommit = commit
+
   if (checkLatest) {
-    await downloadRepository(
-      authToken,
-      VLANG_GITHUB_OWNER,
-      VLANG_GITHUB_REPO,
-      '',
-      '',
-      repositoryPath
-    )
+    nextRef = ''
+    nextCommit = ''
   }
+
+  await downloadRepository(
+    authToken,
+    VLANG_GITHUB_OWNER,
+    VLANG_GITHUB_REPO,
+    repositoryPath,
+    nextRef,
+    nextCommit
+  )
 
   if (!fs.existsSync(vBinPath)) {
     core.info('Running make...')
