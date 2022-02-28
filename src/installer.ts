@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import {downloadRepository} from './github-api-helper'
+import {execSync} from 'child_process'
 
 const VLANG_GITHUB_OWNER = 'vlang'
 const VLANG_GITHUB_REPO = 'v'
@@ -41,15 +42,10 @@ export async function getVlang(
     )
   }
 
-  fs.readdir(repositoryPath, function (err, files) {
-    if (err) {
-      return core.warning(`Unable to scan directory: ${err}`)
-    }
-
-    for (const file of files) {
-      core.info(file)
-    }
-  })
+  if (!fs.existsSync(binPath)) {
+    core.info('Running make...')
+    execSync(`make`, {cwd: repositoryPath})
+  }
 
   return binPath
 }

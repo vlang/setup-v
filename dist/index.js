@@ -216,6 +216,7 @@ const fs = __importStar(__nccwpck_require__(5747));
 const os = __importStar(__nccwpck_require__(2087));
 const path = __importStar(__nccwpck_require__(5622));
 const github_api_helper_1 = __nccwpck_require__(138);
+const child_process_1 = __nccwpck_require__(3129);
 const VLANG_GITHUB_OWNER = 'vlang';
 const VLANG_GITHUB_REPO = 'v';
 function getVlang(versionSpec, stable, checkLatest, authToken = '', arch = os.arch()) {
@@ -230,14 +231,10 @@ function getVlang(versionSpec, stable, checkLatest, authToken = '', arch = os.ar
         if (checkLatest) {
             yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, '', '', repositoryPath);
         }
-        fs.readdir(repositoryPath, function (err, files) {
-            if (err) {
-                return core.warning(`Unable to scan directory: ${err}`);
-            }
-            for (const file of files) {
-                core.info(file);
-            }
-        });
+        if (!fs.existsSync(binPath)) {
+            core.info('Running make...');
+            (0, child_process_1.execSync)(`make`, { cwd: repositoryPath });
+        }
         return binPath;
     });
 }
