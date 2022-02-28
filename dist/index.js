@@ -248,6 +248,7 @@ function getVlang({ authToken, version, checkLatest, stable, ref, arch = os.arch
                 correctedRef = yield (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
             }
         }
+        core.info(`Downloading vlang ${correctedRef}...`);
         yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, repositoryPath, correctedRef);
         if (!fs.existsSync(vBinPath)) {
             core.info('Running make...');

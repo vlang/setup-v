@@ -60,6 +60,8 @@ export async function getVlang({
     }
   }
 
+  core.info(`Downloading vlang ${correctedRef}...`)
+
   await downloadRepository(
     authToken,
     VLANG_GITHUB_OWNER,
