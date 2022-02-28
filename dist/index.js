@@ -104,13 +104,21 @@ function downloadRepository(authToken, owner, repo, repositoryPath, ref, commit)
 exports.downloadRepository = downloadRepository;
 function getLatestRelease(authToken, owner, repo) {
     return __awaiter(this, void 0, void 0, function* () {
+        core.info('Retrieving the latest release');
+        let result;
         const octokit = github.getOctokit(authToken);
         const params = {
             owner,
             repo
         };
         const response = yield octokit.rest.repos.getLatestRelease(params);
-        return response.data.tag_name;
+        result = response.data.tag_name;
+        core.info(`Latest release '${result}'`);
+        // Prefix with 'refs/tags'
+        if (!result.startsWith('refs/')) {
+            result = `refs/tags/${result}`;
+        }
+        return result;
     });
 }
 exports.getLatestRelease = getLatestRelease;
@@ -233,10 +241,11 @@ function getVlang({ authToken, version, checkLatest, stable, ref, arch = os.arch
             correctedRef = `refs/tags/${version}`;
         }
         if (checkLatest) {
+            core.info('Checking latest release...');
             correctedRef = '';
             if (stable) {
-                const latestRelease = yield (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
-                correctedRef = `refs/tags/${latestRelease}`;
+                core.info('Checking latest stable release...');
+                correctedRef = yield (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
             }
         }
         yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, repositoryPath, correctedRef);

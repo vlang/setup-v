@@ -47,15 +47,16 @@ export async function getVlang({
   }
 
   if (checkLatest) {
+    core.info('Checking latest release...')
     correctedRef = ''
 
     if (stable) {
-      const latestRelease = await getLatestRelease(
+      core.info('Checking latest stable release...')
+      correctedRef = await getLatestRelease(
         authToken,
         VLANG_GITHUB_OWNER,
         VLANG_GITHUB_REPO
       )
-      correctedRef = `refs/tags/${latestRelease}`
     }
   }
 
