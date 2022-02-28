@@ -105,19 +105,14 @@ exports.downloadRepository = downloadRepository;
 function getLatestRelease(authToken, owner, repo) {
     return __awaiter(this, void 0, void 0, function* () {
         core.info('Retrieving the latest release');
-        let result;
         const octokit = github.getOctokit(authToken);
         const params = {
             owner,
             repo
         };
         const response = yield octokit.rest.repos.getLatestRelease(params);
-        result = response.data.tag_name;
+        const result = response.data.tag_name;
         core.info(`Latest release '${result}'`);
-        // Prefix with 'refs/tags'
-        if (!result.startsWith('refs/')) {
-            result = `refs/tags/${result}`;
-        }
         return result;
     });
 }
@@ -238,7 +233,7 @@ function getVlang({ authToken, version, checkLatest, stable, ref, arch = os.arch
         }
         let correctedRef = ref;
         if (version) {
-            correctedRef = `refs/tags/${version}`;
+            correctedRef = version;
         }
         if (checkLatest) {
             core.info('Checking latest release...');
