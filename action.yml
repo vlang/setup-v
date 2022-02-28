@@ -16,9 +16,9 @@ inputs:
       [Learn more about creating and using encrypted secrets](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/creating-and-using-encrypted-secrets)
     default: ${{ github.token }}
   version:
-    description: "Version Spec of the version to use. Examples: 0.2.4, weekly.2022.07"
+    description: "Version to use. It can be the branch, tag or SHA to checkout from the V repository. Examples: 0.2.4, weekly.2022.07"
   version-file:
-    description: "File containing the version Spec of the version to use. Examples: .v-version"
+    description: "File containing the version to use. It can contain the branch, tag or SHA to checkout from the V repository. Examples: .v-version"
   architecture:
     description: "Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default."
   check-latest:
@@ -27,9 +27,6 @@ inputs:
   stable:
     description: "Set this option if you want the action to use the stable version of V"
     default: "false"
-  ref:
-    description: >
-      The branch, tag or SHA to checkout from the V repository. Uses the default branch.
 runs:
   using: "node12"
   main: "dist/index.js"

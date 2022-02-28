@@ -13,7 +13,6 @@ export interface GetVlangRequest {
   version: string
   checkLatest: boolean
   stable?: boolean
-  ref?: string
   arch?: string
 }
 
@@ -22,7 +21,6 @@ export async function getVlang({
   version,
   checkLatest,
   stable,
-  ref,
   arch = os.arch()
 }: GetVlangRequest): Promise<string> {
   const osPlat: string = os.platform()
@@ -40,11 +38,7 @@ export async function getVlang({
     return repositoryPath
   }
 
-  let correctedRef = ref
-
-  if (version) {
-    correctedRef = version
-  }
+  let correctedRef = version
 
   if (checkLatest) {
     core.info('Checking latest release...')

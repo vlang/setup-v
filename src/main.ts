@@ -33,7 +33,6 @@ async function run(): Promise<void> {
     }
 
     const token = core.getInput('token', {required: true})
-    const ref = core.getInput('ref')
     const stable = strToBoolean(core.getInput('stable') || 'false')
     const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
 
@@ -42,7 +41,6 @@ async function run(): Promise<void> {
       version,
       checkLatest,
       stable,
-      ref,
       arch
     })
 
@@ -71,10 +69,6 @@ function resolveVersionInput(): string {
     )
   }
 
-  if (version) {
-    return version
-  }
-
   if (versionFileInput) {
     const versionFilePath = path.join(
       process.env.GITHUB_WORKSPACE!,
@@ -85,9 +79,11 @@ function resolveVersionInput(): string {
         `The specified v version file at: ${versionFilePath} does not exist`
       )
     }
-    version = parseVersionFile(fs.readFileSync(versionFilePath, 'utf8'))
-    core.info(`Resolved ${versionFileInput} as ${version}`)
+    version = fs.readFileSync(versionFilePath, 'utf8')
   }
+
+  version = parseVersionFile(version)
+  core.info(`Resolved ${versionFileInput} as ${version}`)
 
   return version
 }
@@ -98,6 +94,7 @@ function parseVersionFile(contents: string): string {
   if (/^v\d/.test(version)) {
     version = version.substring(1)
   }
+
   return version
 }
 

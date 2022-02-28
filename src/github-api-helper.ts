@@ -157,14 +157,13 @@ async function downloadArchive(
     ref: commit || ref
   }
 
-  if (IS_WINDOWS) {
-    const response = await octokit.rest.repos.downloadZipballArchive(params)
+  const download = IS_WINDOWS
+    ? octokit.rest.repos.downloadZipballArchive
+    : octokit.rest.repos.downloadTarballArchive
 
-    // @ts-ignore https://github.com/octokit/types.ts/issues/211
-    return Buffer.from(response.data)
-  }
+  const response = await download(params)
 
-  const response = await octokit.rest.repos.downloadTarballArchive(params)
+  core.info(`Downloaded archive '${response.url}'`)
 
   // @ts-ignore https://github.com/octokit/types.ts/issues/211
   return Buffer.from(response.data)

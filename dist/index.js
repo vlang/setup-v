@@ -165,12 +165,11 @@ function downloadArchive(authToken, owner, repo, ref = '', commit = '') {
             repo,
             ref: commit || ref
         };
-        if (IS_WINDOWS) {
-            const response = yield octokit.rest.repos.downloadZipballArchive(params);
-            // @ts-ignore https://github.com/octokit/types.ts/issues/211
-            return Buffer.from(response.data);
-        }
-        const response = yield octokit.rest.repos.downloadTarballArchive(params);
+        const download = IS_WINDOWS
+            ? octokit.rest.repos.downloadZipballArchive
+            : octokit.rest.repos.downloadTarballArchive;
+        const response = yield download(params);
+        core.info(`Downloaded archive '${response.url}'`);
         // @ts-ignore https://github.com/octokit/types.ts/issues/211
         return Buffer.from(response.data);
     });
@@ -222,7 +221,7 @@ const github_api_helper_1 = __nccwpck_require__(138);
 const child_process_1 = __nccwpck_require__(3129);
 const VLANG_GITHUB_OWNER = 'vlang';
 const VLANG_GITHUB_REPO = 'v';
-function getVlang({ authToken, version, checkLatest, stable, ref, arch = os.arch() }) {
+function getVlang({ authToken, version, checkLatest, stable, arch = os.arch() }) {
     return __awaiter(this, void 0, void 0, function* () {
         const osPlat = os.platform();
         const osArch = translateArchToDistUrl(arch);
@@ -231,10 +230,7 @@ function getVlang({ authToken, version, checkLatest, stable, ref, arch = os.arch
         if (fs.existsSync(repositoryPath)) {
             return repositoryPath;
         }
-        let correctedRef = ref;
-        if (version) {
-            correctedRef = version;
-        }
+        let correctedRef = version;
         if (checkLatest) {
             core.info('Checking latest release...');
             correctedRef = '';
@@ -328,7 +324,6 @@ function run() {
                 arch = os.arch();
             }
             const token = core.getInput('token', { required: true });
-            const ref = core.getInput('ref');
             const stable = strToBoolean(core.getInput('stable') || 'false');
             const checkLatest = strToBoolean(core.getInput('check-latest') || 'false');
             const binPath = yield installer.getVlang({
@@ -336,7 +331,6 @@ function run() {
                 version,
                 checkLatest,
                 stable,
-                ref,
                 arch
             });
             core.info('Adding v to the cache...');
@@ -363,17 +357,15 @@ function resolveVersionInput() {
     if (version && versionFileInput) {
         core.warning('Both version and version-file inputs are specified, only version will be used');
     }
-    if (version) {
-        return version;
-    }
     if (versionFileInput) {
         const versionFilePath = path.join(process.env.GITHUB_WORKSPACE, versionFileInput);
         if (!fs.existsSync(versionFilePath)) {
             throw new Error(`The specified v version file at: ${versionFilePath} does not exist`);
         }
-        version = parseVersionFile(fs.readFileSync(versionFilePath, 'utf8'));
-        core.info(`Resolved ${versionFileInput} as ${version}`);
+        version = fs.readFileSync(versionFilePath, 'utf8');
     }
+    version = parseVersionFile(version);
+    core.info(`Resolved ${versionFileInput} as ${version}`);
     return version;
 }
 function parseVersionFile(contents) {
