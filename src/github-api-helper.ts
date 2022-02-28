@@ -84,8 +84,6 @@ export async function getLatestRelease(
   repo: string
 ): Promise<string> {
   core.info('Retrieving the latest release')
-  let result: string
-
   const octokit = github.getOctokit(authToken)
   const params = {
     owner,
@@ -94,14 +92,9 @@ export async function getLatestRelease(
 
   const response = await octokit.rest.repos.getLatestRelease(params)
 
-  result = response.data.tag_name
+  const result = response.data.tag_name
 
   core.info(`Latest release '${result}'`)
-
-  // Prefix with 'refs/tags'
-  if (!result.startsWith('refs/')) {
-    result = `refs/tags/${result}`
-  }
 
   return result
 }

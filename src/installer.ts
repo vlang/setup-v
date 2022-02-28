@@ -43,7 +43,7 @@ export async function getVlang({
   let correctedRef = ref
 
   if (version) {
-    correctedRef = `refs/tags/${version}`
+    correctedRef = version
   }
 
   if (checkLatest) {
