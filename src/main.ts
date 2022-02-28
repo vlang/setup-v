@@ -1,11 +1,12 @@
 import * as core from '@actions/core'
 import * as cp from 'child_process'
+import * as fs from 'fs'
 import * as installer from './installer'
+import * as os from 'os'
 import * as path from 'path'
 import * as tc from '@actions/tool-cache'
 import * as util from 'util'
-import fs from 'fs'
-import os from 'os'
+import {IS_POST} from './state-helper'
 
 export const execer = util.promisify(cp.exec)
 
@@ -32,18 +33,16 @@ async function run(): Promise<void> {
     }
 
     const token = core.getInput('token', {required: true})
-    const stable = strToBoolean(core.getInput('stable') || 'true')
     const ref = core.getInput('ref')
-    const commit = core.getInput('commit')
+    const stable = strToBoolean(core.getInput('stable') || 'false')
     const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
 
     const binPath = await installer.getVlang({
       authToken: token,
       version,
-      stable,
       checkLatest,
+      stable,
       ref,
-      commit,
       arch
     })
 
@@ -56,6 +55,10 @@ async function run(): Promise<void> {
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
   }
+}
+
+export async function cleanup(): Promise<void> {
+  // @todo: implement
 }
 
 function resolveVersionInput(): string {
@@ -121,4 +124,8 @@ async function getVersion(binPath: string): Promise<string> {
   return '0.0.0'
 }
 
-run()
+if (IS_POST) {
+  cleanup()
+} else {
+  run()
+}

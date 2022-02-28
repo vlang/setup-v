@@ -219,25 +219,31 @@ const github_api_helper_1 = __nccwpck_require__(138);
 const child_process_1 = __nccwpck_require__(3129);
 const VLANG_GITHUB_OWNER = 'vlang';
 const VLANG_GITHUB_REPO = 'v';
-function getVlang({ authToken, version, checkLatest, ref, commit, arch = os.arch() }) {
+function getVlang({ authToken, version, checkLatest, stable, ref, arch = os.arch() }) {
     return __awaiter(this, void 0, void 0, function* () {
         const osPlat = os.platform();
         const osArch = translateArchToDistUrl(arch);
-        const repositoryPath = path.join(process.env.GITHUB_WORKSPACE, 'vlang', `v${version}`, `vlang_${osPlat}_${osArch}`);
+        const repositoryPath = path.join(process.env.GITHUB_WORKSPACE, 'vlang', `vlang_${osPlat}_${osArch}`);
         const vBinPath = path.join(repositoryPath, 'v');
         if (fs.existsSync(repositoryPath)) {
             return repositoryPath;
         }
-        let nextRef = ref;
-        let nextCommit = commit;
-        if (checkLatest) {
-            nextRef = '';
-            nextCommit = '';
+        let correctedRef = ref;
+        if (version) {
+            correctedRef = `refs/tags/${version}`;
         }
-        yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, repositoryPath, nextRef, nextCommit);
+        if (checkLatest) {
+            correctedRef = '';
+            if (stable) {
+                const latestRelease = yield (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
+                correctedRef = `refs/tags/${latestRelease}`;
+            }
+        }
+        yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, repositoryPath, correctedRef);
         if (!fs.existsSync(vBinPath)) {
             core.info('Running make...');
-            (0, child_process_1.execSync)(`make`, { cwd: repositoryPath });
+            // eslint-disable-next-line no-console
+            console.log((0, child_process_1.execSync)(`make`, { cwd: repositoryPath }).toString());
         }
         return repositoryPath;
     });
@@ -287,19 +293,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.execer = void 0;
+exports.cleanup = exports.execer = void 0;
 const core = __importStar(__nccwpck_require__(2186));
 const cp = __importStar(__nccwpck_require__(3129));
+const fs = __importStar(__nccwpck_require__(5747));
 const installer = __importStar(__nccwpck_require__(1480));
+const os = __importStar(__nccwpck_require__(2087));
 const path = __importStar(__nccwpck_require__(5622));
 const tc = __importStar(__nccwpck_require__(7784));
 const util = __importStar(__nccwpck_require__(1669));
-const fs_1 = __importDefault(__nccwpck_require__(5747));
-const os_1 = __importDefault(__nccwpck_require__(2087));
+const state_helper_1 = __nccwpck_require__(8647);
 exports.execer = util.promisify(cp.exec);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -316,20 +320,18 @@ function run() {
                 core.warning('`architecture` is provided but `version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `version`');
             }
             if (!arch) {
-                arch = os_1.default.arch();
+                arch = os.arch();
             }
             const token = core.getInput('token', { required: true });
-            const stable = strToBoolean(core.getInput('stable') || 'true');
             const ref = core.getInput('ref');
-            const commit = core.getInput('commit');
+            const stable = strToBoolean(core.getInput('stable') || 'false');
             const checkLatest = strToBoolean(core.getInput('check-latest') || 'false');
             const binPath = yield installer.getVlang({
                 authToken: token,
                 version,
-                stable,
                 checkLatest,
+                stable,
                 ref,
-                commit,
                 arch
             });
             core.info('Adding v to the cache...');
@@ -344,6 +346,12 @@ function run() {
         }
     });
 }
+function cleanup() {
+    return __awaiter(this, void 0, void 0, function* () {
+        // @todo: implement
+    });
+}
+exports.cleanup = cleanup;
 function resolveVersionInput() {
     let version = core.getInput('version');
     const versionFileInput = core.getInput('version-file');
@@ -355,10 +363,10 @@ function resolveVersionInput() {
     }
     if (versionFileInput) {
         const versionFilePath = path.join(process.env.GITHUB_WORKSPACE, versionFileInput);
-        if (!fs_1.default.existsSync(versionFilePath)) {
+        if (!fs.existsSync(versionFilePath)) {
             throw new Error(`The specified v version file at: ${versionFilePath} does not exist`);
         }
-        version = parseVersionFile(fs_1.default.readFileSync(versionFilePath, 'utf8'));
+        version = parseVersionFile(fs.readFileSync(versionFilePath, 'utf8'));
         core.info(`Resolved ${versionFileInput} as ${version}`);
     }
     return version;
@@ -388,7 +396,12 @@ function getVersion(binPath) {
         return '0.0.0';
     });
 }
-run();
+if (state_helper_1.IS_POST) {
+    cleanup();
+}
+else {
+    run();
+}
 
 
 /***/ }),
@@ -483,6 +496,46 @@ function execute(action) {
     });
 }
 exports.execute = execute;
+
+
+/***/ }),
+
+/***/ 8647:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.IS_POST = void 0;
+const coreCommand = __importStar(__nccwpck_require__(7351));
+/**
+ * Indicates whether the POST action is running
+ */
+exports.IS_POST = !!process.env['STATE_isPost'];
+// Publish a variable so that when the POST action runs, it can determine it should run the cleanup logic.
+// This is necessary since we don't have a separate entry point.
+if (!exports.IS_POST) {
+    coreCommand.issueCommand('save-state', { name: 'isPost' }, 'true');
+}
 
 
 /***/ }),

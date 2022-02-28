@@ -2,7 +2,7 @@ import * as core from '@actions/core'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import {downloadRepository} from './github-api-helper'
+import {downloadRepository, getLatestRelease} from './github-api-helper'
 import {execSync} from 'child_process'
 
 const VLANG_GITHUB_OWNER = 'vlang'
@@ -11,10 +11,9 @@ const VLANG_GITHUB_REPO = 'v'
 export interface GetVlangRequest {
   authToken: string
   version: string
-  stable: boolean
   checkLatest: boolean
+  stable?: boolean
   ref?: string
-  commit?: string
   arch?: string
 }
 
@@ -22,8 +21,8 @@ export async function getVlang({
   authToken,
   version,
   checkLatest,
+  stable,
   ref,
-  commit,
   arch = os.arch()
 }: GetVlangRequest): Promise<string> {
   const osPlat: string = os.platform()
@@ -32,7 +31,6 @@ export async function getVlang({
   const repositoryPath = path.join(
     process.env.GITHUB_WORKSPACE!,
     'vlang',
-    `v${version}`,
     `vlang_${osPlat}_${osArch}`
   )
 
@@ -42,12 +40,23 @@ export async function getVlang({
     return repositoryPath
   }
 
-  let nextRef = ref
-  let nextCommit = commit
+  let correctedRef = ref
+
+  if (version) {
+    correctedRef = `refs/tags/${version}`
+  }
 
   if (checkLatest) {
-    nextRef = ''
-    nextCommit = ''
+    correctedRef = ''
+
+    if (stable) {
+      const latestRelease = await getLatestRelease(
+        authToken,
+        VLANG_GITHUB_OWNER,
+        VLANG_GITHUB_REPO
+      )
+      correctedRef = `refs/tags/${latestRelease}`
+    }
   }
 
   await downloadRepository(
@@ -55,13 +64,13 @@ export async function getVlang({
     VLANG_GITHUB_OWNER,
     VLANG_GITHUB_REPO,
     repositoryPath,
-    nextRef,
-    nextCommit
+    correctedRef
   )
 
   if (!fs.existsSync(vBinPath)) {
     core.info('Running make...')
-    execSync(`make`, {cwd: repositoryPath})
+    // eslint-disable-next-line no-console
+    console.log(execSync(`make`, {cwd: repositoryPath}).toString())
   }
 
   return repositoryPath

@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  check-latest:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -29,6 +29,7 @@ jobs:
         run: npm ci
 
       - name: Lint check
+        if: ${{ matrix.os != 'windows-latest' }}
         run: npm run lint
 
       - name: Test
@@ -41,6 +42,82 @@ jobs:
         uses: ./
         with:
           check-latest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test if the executable is available
+        run: v version
+
+  check-latest-stable:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint check
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Run Action
+        uses: ./
+        with:
+          check-latest: true
+          stable: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test if the executable is available
+        run: v version
+
+  version:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        version: [0.2.4, weekly.2022.07]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint check
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Run Action
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test if the executable is available
