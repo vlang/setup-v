@@ -1,3 +1,4 @@
+import * as core from '@actions/core'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
@@ -39,6 +40,16 @@ export async function getVlang(
       repositoryPath
     )
   }
+
+  fs.readdir(repositoryPath, function (err, files) {
+    if (err) {
+      return core.warning(`Unable to scan directory: ${err}`)
+    }
+
+    for (const file of files) {
+      core.info(file)
+    }
+  })
 
   return binPath
 }
