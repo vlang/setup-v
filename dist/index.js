@@ -224,18 +224,18 @@ function getVlang(versionSpec, stable, checkLatest, authToken = '', arch = os.ar
         const osPlat = os.platform();
         const osArch = translateArchToDistUrl(arch);
         const repositoryPath = path.join(process.env.GITHUB_WORKSPACE, 'vlang', `v${versionSpec}`, `vlang_${osPlat}_${osArch}`);
-        const binPath = path.join(repositoryPath, 'v');
+        const vBinPath = path.join(repositoryPath, 'v');
         if (fs.existsSync(repositoryPath)) {
             return repositoryPath;
         }
         if (checkLatest) {
             yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, '', '', repositoryPath);
         }
-        if (!fs.existsSync(binPath)) {
+        if (!fs.existsSync(vBinPath)) {
             core.info('Running make...');
             (0, child_process_1.execSync)(`make`, { cwd: repositoryPath });
         }
-        return binPath;
+        return repositoryPath;
     });
 }
 exports.getVlang = getVlang;
@@ -365,9 +365,10 @@ function parseVersionFile(contents) {
 }
 function getVersion(binPath) {
     return __awaiter(this, void 0, void 0, function* () {
-        const { stdout, stderr } = yield (0, exports.execer)(`${binPath} version`);
+        const vBinPath = path.join(binPath, 'v');
+        const { stdout, stderr } = yield (0, exports.execer)(`${vBinPath} version`);
         if (stderr !== '') {
-            throw new Error(`Unable to get version from ${binPath}`);
+            throw new Error(`Unable to get version from ${vBinPath}`);
         }
         if (stdout !== '') {
             return stdout.trim().split(' ')[1];

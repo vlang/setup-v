@@ -105,10 +105,12 @@ function parseVersionFile(contents: string): string {
 }
 
 export async function getVersion(binPath: string): Promise<string> {
-  const {stdout, stderr} = await execer(`${binPath} version`)
+  const vBinPath = path.join(binPath, 'v')
+
+  const {stdout, stderr} = await execer(`${vBinPath} version`)
 
   if (stderr !== '') {
-    throw new Error(`Unable to get version from ${binPath}`)
+    throw new Error(`Unable to get version from ${vBinPath}`)
   }
 
   if (stdout !== '') {

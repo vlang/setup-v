@@ -25,7 +25,7 @@ export async function getVlang(
     `vlang_${osPlat}_${osArch}`
   )
 
-  const binPath = path.join(repositoryPath, 'v')
+  const vBinPath = path.join(repositoryPath, 'v')
 
   if (fs.existsSync(repositoryPath)) {
     return repositoryPath
@@ -42,12 +42,12 @@ export async function getVlang(
     )
   }
 
-  if (!fs.existsSync(binPath)) {
+  if (!fs.existsSync(vBinPath)) {
     core.info('Running make...')
     execSync(`make`, {cwd: repositoryPath})
   }
 
-  return binPath
+  return repositoryPath
 }
 
 function translateArchToDistUrl(arch: string): string {
