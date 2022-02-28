@@ -23,6 +23,8 @@ export async function getVlang(
     `vlang_${osPlat}_${osArch}`
   )
 
+  const binPath = path.join(repositoryPath, 'v')
+
   if (fs.existsSync(repositoryPath)) {
     return repositoryPath
   }
@@ -38,7 +40,7 @@ export async function getVlang(
     )
   }
 
-  return ''
+  return binPath
 }
 
 function translateArchToDistUrl(arch: string): string {

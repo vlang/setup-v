@@ -222,13 +222,14 @@ function getVlang(versionSpec, stable, checkLatest, authToken = '', arch = os.ar
         const osPlat = os.platform();
         const osArch = translateArchToDistUrl(arch);
         const repositoryPath = path.join(process.env.GITHUB_WORKSPACE, 'vlang', `v${versionSpec}`, `vlang_${osPlat}_${osArch}`);
+        const binPath = path.join(repositoryPath, 'v');
         if (fs.existsSync(repositoryPath)) {
             return repositoryPath;
         }
         if (checkLatest) {
             yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, '', '', repositoryPath);
         }
-        return '';
+        return binPath;
     });
 }
 exports.getVlang = getVlang;
