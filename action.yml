@@ -19,14 +19,14 @@ inputs:
     description: "Version to use. It can be the branch, tag or SHA to checkout from the V repository. Examples: 0.2.4, weekly.2022.07"
   version-file:
     description: "File containing the version to use. It can contain the branch, tag or SHA to checkout from the V repository. Examples: .v-version"
-  architecture:
-    description: "Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default."
   check-latest:
     description: "Set this option if you want the action to check for the latest available version of V. If `stable` is false, it will check for the latest commit from the default branch."
     default: "false"
   stable:
     description: "Set this option if you want the action to use the stable version of V"
     default: "false"
+  architecture:
+    description: "Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default."
 runs:
   using: "node12"
   main: "dist/index.js"
