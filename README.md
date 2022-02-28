@@ -43,7 +43,8 @@ GitHub Action that allows you to setup a V environment.
     # If `stable` is false, it will check for the latest commit from the default branch.
     check-latest: false
 
-    # Set this option if you want the action to use the stable version of V
+    # Set this option if you want the action to use the stable version of V.
+    # Will be ignored if `check-latest` is false.
     stable: false
 
     # Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default.
