@@ -27,6 +27,15 @@ inputs:
     default: "false"
   architecture:
     description: "Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default."
+outputs:
+  bin-path:
+    description: "Path to the directory that contains the V binary"
+  v-bin-path:
+    description: "Path to the V binary"
+  version: 
+    description: "Version of V installed"
+  architecture:
+    description: "Architecture that was used to install V"
 runs:
   using: "node12"
   main: "dist/index.js"
