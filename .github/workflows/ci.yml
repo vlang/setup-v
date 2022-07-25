@@ -47,7 +47,7 @@ jobs:
       - name: Test if the executable is available
         run: v version
 
-  check-stable:
+  ignore-stable-without-latest-flag:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
