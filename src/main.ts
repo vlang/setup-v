@@ -50,6 +50,12 @@ async function run(): Promise<void> {
     core.info(`Cached v to: ${cachedPath}`)
 
     core.addPath(cachedPath)
+
+    const vBinPath = path.join(binPath, 'v')
+    core.setOutput('bin-path', binPath)
+    core.setOutput('v-bin-path', vBinPath)
+    core.setOutput('version', installedVersion)
+    core.setOutput('architecture', arch)
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
   }

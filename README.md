@@ -51,6 +51,15 @@ GitHub Action that allows you to setup a V environment.
     architecture: ''
 ```
 
+## Output
+
+This action will output the following variables:
+
+- `bin-path`: Path to the directory that contains the V binary.
+- `v-bin-path`: Path to the V binary.
+- `version`: Version of V that was used.
+- `architecture`: Architecture that was used to install V.
+
 ## Contributors
 
 <a href="https://github.com/vlang/setup-v/contributors">
