@@ -546,7 +546,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.IS_POST = void 0;
-const coreCommand = __importStar(__nccwpck_require__(7351));
+const core = __importStar(__nccwpck_require__(2186));
 /**
  * Indicates whether the POST action is running
  */
@@ -554,7 +554,7 @@ exports.IS_POST = !!process.env['STATE_isPost'];
 // Publish a variable so that when the POST action runs, it can determine it should run the cleanup logic.
 // This is necessary since we don't have a separate entry point.
 if (!exports.IS_POST) {
-    coreCommand.issueCommand('save-state', { name: 'isPost' }, 'true');
+    core.saveState('isPost', 'true');
 }
 
 
