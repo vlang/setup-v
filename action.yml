@@ -16,7 +16,7 @@ inputs:
       [Learn more about creating and using encrypted secrets](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/creating-and-using-encrypted-secrets)
     default: ${{ github.token }}
   version:
-    description: 'Version to use. It can be the branch, tag or SHA to checkout from the V repository. Examples: 0.2.4, weekly.2022.07'
+    description: 'Version to use. It can be the branch, tag or SHA to checkout from the V repository. Examples: 0.4.4, weekly.2024.06'
   version-file:
     description: 'File containing the version to use. It can contain the branch, tag or SHA to checkout from the V repository. Examples: .v-version'
   check-latest:
@@ -37,6 +37,6 @@ outputs:
   architecture:
     description: 'Architecture that was used to install V'
 runs:
-  using: 'node16'
+  using: 'node20'
   main: 'dist/index.js'
   post: 'dist/index.js'

@@ -17,7 +17,7 @@ GitHub Action that allows you to setup a V environment.
 ## Usage
 
 ```yaml
-- uses: vlang/setup-v@v1.3
+- uses: vlang/setup-v@v1.4
   with:
     # Personal access token (PAT) used to fetch the repository. The PAT is configured
     # with the local git config, which enables your scripts to run authenticated git
