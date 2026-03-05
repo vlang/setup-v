@@ -25,12 +25,7 @@ export async function getVlang({
 }: GetVlangRequest): Promise<string> {
   const osPlat: string = os.platform()
   const osArch: string = translateArchToDistUrl(arch)
-
-  const vlangDir = path.join(
-    os.homedir(),
-    osPlat === 'win32' ? 'vlang' : '.vlang'
-  )
-
+  const vlangDir = path.join(os.homedir(), 'vlang')
   const installDir = path.join(vlangDir, `vlang_${osPlat}_${osArch}`)
   const vBinPath = path.join(installDir, 'v')
 
