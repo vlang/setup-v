@@ -232,7 +232,7 @@ function getVlang({ authToken, version, checkLatest, stable, arch = os.arch() })
     return __awaiter(this, void 0, void 0, function* () {
         const osPlat = os.platform();
         const osArch = translateArchToDistUrl(arch);
-        const vlangDir = path.join(os.homedir(), osPlat === 'win32' ? 'vlang' : '.vlang');
+        const vlangDir = path.join(os.homedir(), 'vlang');
         const installDir = path.join(vlangDir, `vlang_${osPlat}_${osArch}`);
         const vBinPath = path.join(installDir, 'v');
         if (fs.existsSync(installDir)) {
