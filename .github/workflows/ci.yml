@@ -126,7 +126,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        version: [weekly.2024.06]
+        version: [0.5]
     runs-on: ${{ matrix.os }}
 
     steps:
