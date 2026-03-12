@@ -14,7 +14,7 @@ export async function downloadRepository(
   authToken: string,
   owner: string,
   repo: string,
-  repositoryPath: string,
+  installDir: string,
   ref?: string,
   commit?: string
 ): Promise<void> {
@@ -25,9 +25,9 @@ export async function downloadRepository(
   }
 
   // create directory if not exists
-  if (!fs.existsSync(repositoryPath)) {
-    core.info(`Creating directory: ${repositoryPath}`)
-    fs.mkdirSync(repositoryPath, {recursive: true})
+  if (!fs.existsSync(installDir)) {
+    core.info(`Creating directory: ${installDir}`)
+    fs.mkdirSync(installDir, {recursive: true})
   }
 
   // Download the archive
@@ -39,13 +39,13 @@ export async function downloadRepository(
   // Write archive to disk
   core.info('Writing archive to disk')
   const uniqueId = uuid()
-  const archivePath = path.join(repositoryPath, `${uniqueId}.tar.gz`)
+  const archivePath = path.join(installDir, `${uniqueId}.tar.gz`)
   await fs.promises.writeFile(archivePath, archiveData)
   archiveData = Buffer.from('') // Free memory
 
   // Extract archive
   core.info('Extracting the archive')
-  const extractPath = path.join(repositoryPath, uniqueId)
+  const extractPath = path.join(installDir, uniqueId)
   await io.mkdirP(extractPath)
   if (IS_WINDOWS) {
     await toolCache.extractZip(archivePath, extractPath)
@@ -63,12 +63,12 @@ export async function downloadRepository(
   )
   const archiveVersion = archiveFileNames[0] // The top-level folder name includes the short SHA
   core.info(`Resolved version ${archiveVersion}`)
-  const tempRepositoryPath = path.join(extractPath, archiveVersion)
+  const tempInstallDir = path.join(extractPath, archiveVersion)
 
   // Move the files
-  for (const fileName of await fs.promises.readdir(tempRepositoryPath)) {
-    const sourcePath = path.join(tempRepositoryPath, fileName)
-    const targetPath = path.join(repositoryPath, fileName)
+  for (const fileName of await fs.promises.readdir(tempInstallDir)) {
+    const sourcePath = path.join(tempInstallDir, fileName)
+    const targetPath = path.join(installDir, fileName)
     if (IS_WINDOWS) {
       await io.cp(sourcePath, targetPath, {recursive: true}) // Copy on Windows (Windows Defender may have a lock)
     } else {
