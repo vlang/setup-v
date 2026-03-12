@@ -10,26 +10,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-latest:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Lint check
-        if: ${{ matrix.os != 'windows-latest' }}
         run: npm run lint
 
       - name: Test
@@ -38,123 +32,45 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run Action
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-output
+          path: lib/
+
+  test-action:
+    needs: build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        scenario: [check-latest, stable, version]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-output
+          path: lib/
+
+      - name: Run Action (check-latest)
+        if: matrix.scenario == 'check-latest'
         uses: ./
         with:
           check-latest: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Test if the executable is available
-        run: v version
-
-  ignore-stable-without-latest-flag:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint check
-        if: ${{ matrix.os != 'windows-latest' }}
-        run: npm run lint
-
-      - name: Test
-        run: npm run test
-
-      - name: Build
-        run: npm run build
-
-      - name: Run Action
+      - name: Run Action (stable)
+        if: matrix.scenario == 'stable'
         uses: ./
         with:
           stable: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Test if the executable is available
-        run: v version
-
-  check-latest-stable:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint check
-        if: ${{ matrix.os != 'windows-latest' }}
-        run: npm run lint
-
-      - name: Test
-        run: npm run test
-
-      - name: Build
-        run: npm run build
-
-      - name: Run Action
+      - name: Run Action (version)
+        if: matrix.scenario == 'version'
         uses: ./
         with:
-          check-latest: true
-          stable: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test if the executable is available
-        run: v version
-
-  version:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        version: [weekly.2024.06]
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint check
-        if: ${{ matrix.os != 'windows-latest' }}
-        run: npm run lint
-
-      - name: Test
-        run: npm run test
-
-      - name: Build
-        run: npm run build
-
-      - name: Run Action
-        uses: ./
-        with:
-          version: ${{ matrix.version }}
+          version: '0.5.1'
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test if the executable is available

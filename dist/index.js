@@ -50,7 +50,7 @@ const retryHelper = __importStar(__nccwpck_require__(2155));
 const toolCache = __importStar(__nccwpck_require__(7784));
 const uuid_1 = __nccwpck_require__(5840);
 const IS_WINDOWS = process.platform === 'win32';
-function downloadRepository(authToken, owner, repo, repositoryPath, ref, commit) {
+function downloadRepository(authToken, owner, repo, installDir, ref, commit) {
     return __awaiter(this, void 0, void 0, function* () {
         // Determine the default branch
         if (!ref && !commit) {
@@ -58,9 +58,9 @@ function downloadRepository(authToken, owner, repo, repositoryPath, ref, commit)
             ref = yield getDefaultBranch(authToken, owner, repo);
         }
         // create directory if not exists
-        if (!fs.existsSync(repositoryPath)) {
-            core.info(`Creating directory: ${repositoryPath}`);
-            fs.mkdirSync(repositoryPath, { recursive: true });
+        if (!fs.existsSync(installDir)) {
+            core.info(`Creating directory: ${installDir}`);
+            fs.mkdirSync(installDir, { recursive: true });
         }
         // Download the archive
         let archiveData = yield retryHelper.execute(() => __awaiter(this, void 0, void 0, function* () {
@@ -70,12 +70,12 @@ function downloadRepository(authToken, owner, repo, repositoryPath, ref, commit)
         // Write archive to disk
         core.info('Writing archive to disk');
         const uniqueId = (0, uuid_1.v4)();
-        const archivePath = path.join(repositoryPath, `${uniqueId}.tar.gz`);
+        const archivePath = path.join(installDir, `${uniqueId}.tar.gz`);
         yield fs.promises.writeFile(archivePath, archiveData);
         archiveData = Buffer.from(''); // Free memory
         // Extract archive
         core.info('Extracting the archive');
-        const extractPath = path.join(repositoryPath, uniqueId);
+        const extractPath = path.join(installDir, uniqueId);
         yield io.mkdirP(extractPath);
         if (IS_WINDOWS) {
             yield toolCache.extractZip(archivePath, extractPath);
@@ -90,11 +90,11 @@ function downloadRepository(authToken, owner, repo, repositoryPath, ref, commit)
         assert.ok(archiveFileNames.length === 1, 'Expected exactly one directory inside archive');
         const archiveVersion = archiveFileNames[0]; // The top-level folder name includes the short SHA
         core.info(`Resolved version ${archiveVersion}`);
-        const tempRepositoryPath = path.join(extractPath, archiveVersion);
+        const tempInstallDir = path.join(extractPath, archiveVersion);
         // Move the files
-        for (const fileName of yield fs.promises.readdir(tempRepositoryPath)) {
-            const sourcePath = path.join(tempRepositoryPath, fileName);
-            const targetPath = path.join(repositoryPath, fileName);
+        for (const fileName of yield fs.promises.readdir(tempInstallDir)) {
+            const sourcePath = path.join(tempInstallDir, fileName);
+            const targetPath = path.join(installDir, fileName);
             if (IS_WINDOWS) {
                 yield io.cp(sourcePath, targetPath, { recursive: true }); // Copy on Windows (Windows Defender may have a lock)
             }
@@ -232,10 +232,11 @@ function getVlang({ authToken, version, checkLatest, stable, arch = os.arch() })
     return __awaiter(this, void 0, void 0, function* () {
         const osPlat = os.platform();
         const osArch = translateArchToDistUrl(arch);
-        const repositoryPath = path.join(process.env.GITHUB_WORKSPACE, 'vlang', `vlang_${osPlat}_${osArch}`);
-        const vBinPath = path.join(repositoryPath, 'v');
-        if (fs.existsSync(repositoryPath)) {
-            return repositoryPath;
+        const vlangDir = path.join(os.homedir(), 'vlang');
+        const installDir = path.join(vlangDir, `vlang_${osPlat}_${osArch}`);
+        const vBinPath = path.join(installDir, 'v');
+        if (fs.existsSync(installDir)) {
+            return installDir;
         }
         let correctedRef = version;
         if (checkLatest) {
@@ -247,13 +248,13 @@ function getVlang({ authToken, version, checkLatest, stable, arch = os.arch() })
             }
         }
         core.info(`Downloading vlang ${correctedRef}...`);
-        yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, repositoryPath, correctedRef);
+        yield (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, installDir, correctedRef);
         if (!fs.existsSync(vBinPath)) {
             core.info('Running make...');
             // eslint-disable-next-line no-console
-            console.log((0, child_process_1.execSync)(`make`, { cwd: repositoryPath }).toString());
+            console.log((0, child_process_1.execSync)(`make`, { cwd: installDir }).toString());
         }
-        return repositoryPath;
+        return installDir;
     });
 }
 exports.getVlang = getVlang;
