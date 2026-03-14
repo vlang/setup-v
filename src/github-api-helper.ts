@@ -17,7 +17,7 @@ export async function downloadRepository(
   installDir: string,
   ref?: string,
   commit?: string
-): Promise<void> {
+): Promise<string> {
   // Determine the default branch
   if (!ref && !commit) {
     core.info('Determining the default branch')
@@ -76,6 +76,8 @@ export async function downloadRepository(
     }
   }
   await io.rmRF(extractPath)
+
+  return archiveVersion
 }
 
 export async function getLatestRelease(

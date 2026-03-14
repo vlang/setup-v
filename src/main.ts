@@ -36,7 +36,22 @@ async function run(): Promise<void> {
     const stable = strToBoolean(core.getInput('stable') || 'false')
     const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
 
-    const binPath = await installer.getVlang({
+    // Check tool cache before downloading
+    if (version) {
+      const cachedVersionPath = tc.find('v', version, arch)
+      if (cachedVersionPath) {
+        core.info(`Found v in cache: ${cachedVersionPath}`)
+        core.addPath(cachedVersionPath)
+        const vBinPath = path.join(cachedVersionPath, 'v')
+        core.setOutput('bin-path', cachedVersionPath)
+        core.setOutput('v-bin-path', vBinPath)
+        core.setOutput('version', version)
+        core.setOutput('architecture', arch)
+        return
+      }
+    }
+
+    const {installDir, resolvedVersion} = await installer.getVlang({
       authToken: token,
       version,
       checkLatest,
@@ -44,15 +59,21 @@ async function run(): Promise<void> {
       arch
     })
 
-    core.info('Adding v to the cache...')
-    const installedVersion = await getVersion(binPath)
-    const cachedPath = await tc.cacheDir(binPath, 'v', installedVersion)
-    core.info(`Cached v to: ${cachedPath}`)
+    // Check cache by resolved version (commit SHA) to avoid re-caching
+    let cachedPath = tc.find('v', resolvedVersion, arch)
+    if (!cachedPath) {
+      core.info('Adding v to the cache...')
+      cachedPath = await tc.cacheDir(installDir, 'v', resolvedVersion)
+      core.info(`Cached v to: ${cachedPath}`)
+    } else {
+      core.info(`Found v in cache: ${cachedPath}`)
+    }
 
     core.addPath(cachedPath)
 
-    const vBinPath = path.join(binPath, 'v')
-    core.setOutput('bin-path', binPath)
+    const installedVersion = await getVersion(installDir)
+    const vBinPath = path.join(cachedPath, 'v')
+    core.setOutput('bin-path', cachedPath)
     core.setOutput('v-bin-path', vBinPath)
     core.setOutput('version', installedVersion)
     core.setOutput('architecture', arch)
@@ -89,7 +110,9 @@ function resolveVersionInput(): string {
   }
 
   version = parseVersionFile(version)
-  core.info(`Resolved ${versionFileInput} as ${version}`)
+  if (versionFileInput) {
+    core.info(`Resolved ${versionFileInput} as ${version}`)
+  }
 
   return version
 }

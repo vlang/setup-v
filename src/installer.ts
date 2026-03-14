@@ -16,22 +16,22 @@ export interface GetVlangRequest {
   arch?: string
 }
 
+export interface GetVlangResult {
+  installDir: string
+  resolvedVersion: string
+}
+
 export async function getVlang({
   authToken,
   version,
   checkLatest,
   stable,
   arch = os.arch()
-}: GetVlangRequest): Promise<string> {
+}: GetVlangRequest): Promise<GetVlangResult> {
   const osPlat: string = os.platform()
   const osArch: string = translateArchToDistUrl(arch)
   const vlangDir = path.join(os.homedir(), 'vlang')
   const installDir = path.join(vlangDir, `vlang_${osPlat}_${osArch}`)
-  const vBinPath = path.join(installDir, 'v')
-
-  if (fs.existsSync(installDir)) {
-    return installDir
-  }
 
   let correctedRef = version
 
@@ -51,7 +51,7 @@ export async function getVlang({
 
   core.info(`Downloading vlang ${correctedRef}...`)
 
-  await downloadRepository(
+  const resolvedVersion = await downloadRepository(
     authToken,
     VLANG_GITHUB_OWNER,
     VLANG_GITHUB_REPO,
@@ -59,13 +59,14 @@ export async function getVlang({
     correctedRef
   )
 
+  const vBinPath = path.join(installDir, 'v')
   if (!fs.existsSync(vBinPath)) {
     core.info('Running make...')
     // eslint-disable-next-line no-console
     console.log(execSync(`make`, {cwd: installDir}).toString())
   }
 
-  return installDir
+  return {installDir, resolvedVersion}
 }
 
 function translateArchToDistUrl(arch: string): string {
