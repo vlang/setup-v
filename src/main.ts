@@ -1,3 +1,4 @@
+import * as cache from '@actions/cache'
 import * as core from '@actions/core'
 import * as cp from 'child_process'
 import * as fs from 'fs'
@@ -7,15 +8,16 @@ import * as path from 'path'
 import * as tc from '@actions/tool-cache'
 import * as util from 'util'
 import {IS_POST} from './state-helper'
+import {
+  getDefaultBranch,
+  getLatestRelease,
+  getRefCommitSha
+} from './github-api-helper'
 
 export const execer = util.promisify(cp.exec)
 
 async function run(): Promise<void> {
   try {
-    //
-    // Version is optional.  If supplied, install / use from the tool cache
-    // If not supplied then task is still used to setup proxy, auth, etc...
-    //
     const version = resolveVersionInput()
 
     let arch = core.getInput('architecture')
@@ -36,45 +38,73 @@ async function run(): Promise<void> {
     const stable = strToBoolean(core.getInput('stable') || 'false')
     const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
 
-    // Check tool cache before downloading
-    if (version) {
-      const cachedVersionPath = tc.find('v', version, arch)
-      if (cachedVersionPath) {
-        core.info(`Found v in cache: ${cachedVersionPath}`)
-        core.addPath(cachedVersionPath)
-        const vBinPath = path.join(cachedVersionPath, 'v')
-        core.setOutput('bin-path', cachedVersionPath)
-        core.setOutput('v-bin-path', vBinPath)
-        core.setOutput('version', version)
-        core.setOutput('architecture', arch)
-        return
+    // Resolve the ref we will use so we can compute a deterministic cache key
+    // before touching the network for the actual archive download.
+    let resolvedRef = version
+    if (checkLatest && stable) {
+      resolvedRef = await getLatestRelease(token, 'vlang', 'v')
+    }
+    if (!resolvedRef) {
+      // No version specified — use the default branch (e.g. master)
+      const fullRef = await getDefaultBranch(token, 'vlang', 'v')
+      resolvedRef = fullRef.replace(/^refs\/heads\//, '')
+    }
+
+    const shortSha = await getRefCommitSha(token, 'vlang', 'v', resolvedRef)
+    const resolvedVersion = `vlang-v-${shortSha}`
+    const cacheKey = `setup-v-${os.platform()}-${arch}-${resolvedVersion}`
+    const installDir = installer.getInstallDir(arch)
+    const vBinPath = path.join(installDir, 'v')
+
+    // ── Try to restore from GitHub Actions cache (persists across jobs) ──────
+    let cacheHit = false
+    if (cache.isFeatureAvailable()) {
+      core.info('Checking GitHub Actions cache...')
+      const restoredKey = await cache.restoreCache([installDir], cacheKey)
+      if (restoredKey && fs.existsSync(vBinPath)) {
+        core.info(`Cache hit — restored v from cache (key: ${restoredKey})`)
+        cacheHit = true
+      } else if (restoredKey) {
+        // Partial/corrupt restore — wipe so the download starts clean
+        core.warning('Cache restored but v binary not found; re-downloading.')
+        fs.rmSync(installDir, {recursive: true, force: true})
       }
     }
 
-    const {installDir, resolvedVersion} = await installer.getVlang({
-      authToken: token,
-      version,
-      checkLatest,
-      stable,
-      arch
-    })
+    // ── Download + build on cache miss ───────────────────────────────────────
+    if (!cacheHit) {
+      await installer.getVlang({
+        authToken: token,
+        version,
+        checkLatest,
+        stable,
+        arch,
+        resolvedRef
+      })
 
-    // Check cache by resolved version (commit SHA) to avoid re-caching
+      if (cache.isFeatureAvailable()) {
+        core.info('Saving v to GitHub Actions cache...')
+        try {
+          await cache.saveCache([installDir], cacheKey)
+          core.info(`Saved v to cache (key: ${cacheKey})`)
+        } catch (err) {
+          // Another parallel job may have already saved the same key — not fatal
+          if (err instanceof Error) core.warning(err.message)
+        }
+      }
+    }
+
+    // ── Register in the within-job tool cache so tc.find() works too ─────────
     let cachedPath = tc.find('v', resolvedVersion, arch)
     if (!cachedPath) {
-      core.info('Adding v to the cache...')
       cachedPath = await tc.cacheDir(installDir, 'v', resolvedVersion)
-      core.info(`Cached v to: ${cachedPath}`)
-    } else {
-      core.info(`Found v in cache: ${cachedPath}`)
     }
 
     core.addPath(cachedPath)
 
     const installedVersion = await getVersion(installDir)
-    const vBinPath = path.join(cachedPath, 'v')
     core.setOutput('bin-path', cachedPath)
-    core.setOutput('v-bin-path', vBinPath)
+    core.setOutput('v-bin-path', path.join(cachedPath, 'v'))
     core.setOutput('version', installedVersion)
     core.setOutput('architecture', arch)
   } catch (error) {

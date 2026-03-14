@@ -3,15 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "description": "TypeScript template action",
-  "main": "lib/main.js",
+  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "type-check": "tsc --noEmit",
     "format": "prettier --write '**/*.ts'",
     "format-check": "prettier --check '**/*.ts'",
     "lint": "eslint src/**/*.ts",
-    "package": "ncc build --source-map --license licenses.txt",
+    "build": "tsdown",
     "test": "jest",
-    "all": "npm run build && npm run format && npm run lint && npm run package && npm test"
+    "all": "npm run type-check && npm run format && npm run lint && npm run build && npm test"
   },
   "repository": {
     "type": "git",
@@ -25,6 +25,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@actions/cache": "6.0.0",
     "@actions/core": "^1.6.0",
     "@actions/github": "^5.0.0",
     "@actions/tool-cache": "^1.7.1",
@@ -37,7 +38,7 @@
     "@types/uuid": "^8.3.4",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "@vercel/ncc": "^0.38.1",
+    "tsdown": "^0.12.0",
     "eslint": "^8.57.0",
     "eslint-plugin-github": "^5.1.8",
     "eslint-plugin-jest": "^29.0.0",

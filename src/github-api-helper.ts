@@ -102,6 +102,21 @@ export async function getLatestRelease(
 }
 
 /**
+ * Returns the 7-character short SHA of the commit that `ref` resolves to.
+ * `ref` may be a branch name, tag name, or full/short commit SHA.
+ */
+export async function getRefCommitSha(
+  authToken: string,
+  owner: string,
+  repo: string,
+  ref: string
+): Promise<string> {
+  const octokit = github.getOctokit(authToken)
+  const response = await octokit.rest.repos.getCommit({owner, repo, ref})
+  return response.data.sha.substring(0, 7)
+}
+
+/**
  * Looks up the default branch name
  */
 export async function getDefaultBranch(

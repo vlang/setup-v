@@ -14,6 +14,7 @@ export interface GetVlangRequest {
   checkLatest: boolean
   stable?: boolean
   arch?: string
+  resolvedRef?: string // pre-resolved branch/tag/SHA; skips ref resolution if provided
 }
 
 export interface GetVlangResult {
@@ -21,22 +22,24 @@ export interface GetVlangResult {
   resolvedVersion: string
 }
 
+export function getInstallDir(arch: string = os.arch()): string {
+  const osArch = translateArchToDistUrl(arch)
+  return path.join(os.homedir(), 'vlang', `vlang_${os.platform()}_${osArch}`)
+}
+
 export async function getVlang({
   authToken,
   version,
   checkLatest,
   stable,
-  arch = os.arch()
+  arch = os.arch(),
+  resolvedRef
 }: GetVlangRequest): Promise<GetVlangResult> {
-  const osPlat: string = os.platform()
-  const osArch: string = translateArchToDistUrl(arch)
-  const vlangDir = path.join(os.homedir(), 'vlang')
-  const installDir = path.join(vlangDir, `vlang_${osPlat}_${osArch}`)
+  const installDir = getInstallDir(arch)
 
-  let correctedRef = version
+  let correctedRef = resolvedRef ?? version
 
-  if (checkLatest) {
-    core.info('Checking latest release...')
+  if (!resolvedRef && checkLatest) {
     correctedRef = ''
 
     if (stable) {
