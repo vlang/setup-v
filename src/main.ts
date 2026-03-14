@@ -38,29 +38,28 @@ async function run(): Promise<void> {
     const stable = strToBoolean(core.getInput('stable') || 'false')
     const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
 
-    // Resolve the ref we will use so we can compute a deterministic cache key
-    // before touching the network for the actual archive download.
-    let resolvedRef = version
-    if (checkLatest && stable) {
-      resolvedRef = await getLatestRelease(token, 'vlang', 'v')
-    }
-    if (!resolvedRef) {
-      // No version specified — use the default branch (e.g. master)
-      const fullRef = await getDefaultBranch(token, 'vlang', 'v')
-      resolvedRef = fullRef.replace(/^refs\/heads\//, '')
-    }
-
-    const shortSha = await getRefCommitSha(token, 'vlang', 'v', resolvedRef)
-    const resolvedVersion = `vlang-v-${shortSha}`
-    const cacheKey = `setup-v-${os.platform()}-${arch}-${resolvedVersion}`
     const installDir = installer.getInstallDir(arch)
     const vBinPath = path.join(installDir, 'v')
+    // When a version is pinned, scope the prefix to that version so a prefix
+    // restore never returns a cache entry built from a different version.
+    const cacheKeyPrefix = version
+      ? `setup-v-${os.platform()}-${arch}-${version}-`
+      : `setup-v-${os.platform()}-${arch}-vlang-v-`
 
-    // ── Try to restore from GitHub Actions cache (persists across jobs) ──────
+    // ── Fast path: prefix-based cache restore (no API calls needed) ──────────
+    // When check-latest is false we can restore the most-recently-saved cache
+    // using only a prefix. This skips the two serial GitHub API calls
+    // (getDefaultBranch + getRefCommitSha) that otherwise dominate latency.
     let cacheHit = false
-    if (cache.isFeatureAvailable()) {
+    let restoredKey: string | undefined
+    if (!checkLatest && cache.isFeatureAvailable()) {
+      // The primary key won't match exactly (we don't know the SHA yet), so
+      // the prefix restore-key is what actually fires and finds the best entry.
+      const primaryKey = `${cacheKeyPrefix}__prefix_only__`
       core.info('Checking GitHub Actions cache...')
-      const restoredKey = await cache.restoreCache([installDir], cacheKey)
+      restoredKey = await cache.restoreCache([installDir], primaryKey, [
+        cacheKeyPrefix
+      ])
       if (restoredKey && fs.existsSync(vBinPath)) {
         core.info(`Cache hit — restored v from cache (key: ${restoredKey})`)
         cacheHit = true
@@ -68,7 +67,51 @@ async function run(): Promise<void> {
         // Partial/corrupt restore — wipe so the download starts clean
         core.warning('Cache restored but v binary not found; re-downloading.')
         fs.rmSync(installDir, {recursive: true, force: true})
+        restoredKey = undefined
       }
+    }
+
+    // ── Resolve ref + compute exact cache key (only when needed) ─────────────
+    let resolvedRef = version
+    let resolvedVersion: string
+    let cacheKey: string
+
+    if (!cacheHit) {
+      if (checkLatest && stable) {
+        resolvedRef = await getLatestRelease(token, 'vlang', 'v')
+      }
+      if (!resolvedRef) {
+        // No version specified — use the default branch (e.g. master)
+        const fullRef = await getDefaultBranch(token, 'vlang', 'v')
+        resolvedRef = fullRef.replace(/^refs\/heads\//, '')
+      }
+
+      const shortSha = await getRefCommitSha(token, 'vlang', 'v', resolvedRef)
+      resolvedVersion = `vlang-v-${shortSha}`
+      cacheKey = `${cacheKeyPrefix}${shortSha}`
+
+      // ── Try exact cache restore when check-latest is on ──────────────────
+      if (checkLatest && cache.isFeatureAvailable()) {
+        core.info('Checking GitHub Actions cache...')
+        restoredKey = await cache.restoreCache([installDir], cacheKey)
+        if (restoredKey && fs.existsSync(vBinPath)) {
+          core.info(`Cache hit — restored v from cache (key: ${restoredKey})`)
+          cacheHit = true
+        } else if (restoredKey) {
+          core.warning('Cache restored but v binary not found; re-downloading.')
+          fs.rmSync(installDir, {recursive: true, force: true})
+          restoredKey = undefined
+        }
+      }
+    } else {
+      // Extract the short SHA from the restored key so we have a consistent
+      // resolvedVersion for the tool-cache registration below.
+      // restoredKey is guaranteed non-undefined here because cacheHit == true.
+      const key = restoredKey ?? ''
+      const shaMatch = key.match(/([a-f0-9]{7,})$/)
+      const shortSha = shaMatch ? shaMatch[1] : 'unknown'
+      resolvedVersion = `vlang-v-${shortSha}`
+      cacheKey = key
     }
 
     // ── Download + build on cache miss ───────────────────────────────────────

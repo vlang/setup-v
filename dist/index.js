@@ -130851,17 +130851,15 @@ async function run() {
 		const token = import_core.getInput("token", { required: true });
 		const stable = strToBoolean(import_core.getInput("stable") || "false");
 		const checkLatest = strToBoolean(import_core.getInput("check-latest") || "false");
-		let resolvedRef = version;
-		if (checkLatest && stable) resolvedRef = await getLatestRelease(token, "vlang", "v");
-		if (!resolvedRef) resolvedRef = (await getDefaultBranch(token, "vlang", "v")).replace(/^refs\/heads\//, "");
-		const resolvedVersion = `vlang-v-${await getRefCommitSha(token, "vlang", "v", resolvedRef)}`;
-		const cacheKey = `setup-v-${os.platform()}-${arch}-${resolvedVersion}`;
 		const installDir = getInstallDir(arch);
 		const vBinPath = path.join(installDir, "v");
+		const cacheKeyPrefix = version ? `setup-v-${os.platform()}-${arch}-${version}-` : `setup-v-${os.platform()}-${arch}-vlang-v-`;
 		let cacheHit = false;
-		if (isFeatureAvailable()) {
+		let restoredKey;
+		if (!checkLatest && isFeatureAvailable()) {
+			const primaryKey = `${cacheKeyPrefix}__prefix_only__`;
 			import_core.info("Checking GitHub Actions cache...");
-			const restoredKey = await restoreCache([installDir], cacheKey);
+			restoredKey = await restoreCache([installDir], primaryKey, [cacheKeyPrefix]);
 			if (restoredKey && fs.existsSync(vBinPath)) {
 				import_core.info(`Cache hit — restored v from cache (key: ${restoredKey})`);
 				cacheHit = true;
@@ -130871,7 +130869,38 @@ async function run() {
 					recursive: true,
 					force: true
 				});
+				restoredKey = void 0;
 			}
+		}
+		let resolvedRef = version;
+		let resolvedVersion;
+		let cacheKey;
+		if (!cacheHit) {
+			if (checkLatest && stable) resolvedRef = await getLatestRelease(token, "vlang", "v");
+			if (!resolvedRef) resolvedRef = (await getDefaultBranch(token, "vlang", "v")).replace(/^refs\/heads\//, "");
+			const shortSha = await getRefCommitSha(token, "vlang", "v", resolvedRef);
+			resolvedVersion = `vlang-v-${shortSha}`;
+			cacheKey = `${cacheKeyPrefix}${shortSha}`;
+			if (checkLatest && isFeatureAvailable()) {
+				import_core.info("Checking GitHub Actions cache...");
+				restoredKey = await restoreCache([installDir], cacheKey);
+				if (restoredKey && fs.existsSync(vBinPath)) {
+					import_core.info(`Cache hit — restored v from cache (key: ${restoredKey})`);
+					cacheHit = true;
+				} else if (restoredKey) {
+					import_core.warning("Cache restored but v binary not found; re-downloading.");
+					fs.rmSync(installDir, {
+						recursive: true,
+						force: true
+					});
+					restoredKey = void 0;
+				}
+			}
+		} else {
+			const key = restoredKey ?? "";
+			const shaMatch = key.match(/([a-f0-9]{7,})$/);
+			resolvedVersion = `vlang-v-${shaMatch ? shaMatch[1] : "unknown"}`;
+			cacheKey = key;
 		}
 		if (!cacheHit) {
 			await getVlang({

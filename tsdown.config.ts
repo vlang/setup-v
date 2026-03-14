@@ -5,5 +5,5 @@ export default defineConfig({
   format: 'cjs',
   outDir: 'dist',
   noExternal: /.+/,
-  dts: false,
+  dts: false
 })
