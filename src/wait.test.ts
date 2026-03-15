@@ -1,5 +1,5 @@
-import {wait} from '../src/wait'
-import {expect, test} from '@jest/globals'
+import {wait} from './wait'
+import {expect, test} from 'vitest'
 
 test('throws invalid number', async () => {
   const input = parseInt('foo', 10)
