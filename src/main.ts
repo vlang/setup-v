@@ -1,3 +1,4 @@
+import * as cache from '@actions/cache'
 import * as core from '@actions/core'
 import * as cp from 'child_process'
 import * as fs from 'fs'
@@ -32,6 +33,22 @@ async function run(): Promise<void> {
       arch = os.arch()
     }
 
+    if (version) {
+      const cacheKey = `v-${version}-${os.platform()}-${arch}`
+      const installDir = installer.getInstallDir(arch)
+      const hit = await cache.restoreCache([installDir], cacheKey)
+      if (hit) {
+        core.info(`Cache hit for V ${version}`)
+        core.addPath(installDir)
+        const vBinPath = path.join(installDir, 'v')
+        core.setOutput('bin-path', installDir)
+        core.setOutput('v-bin-path', vBinPath)
+        core.setOutput('version', version)
+        core.setOutput('architecture', arch)
+        return
+      }
+    }
+
     const token = core.getInput('token', {required: true})
     const stable = strToBoolean(core.getInput('stable') || 'false')
     const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
@@ -50,6 +67,12 @@ async function run(): Promise<void> {
     core.info(`Cached v to: ${cachedPath}`)
 
     core.addPath(cachedPath)
+
+    if (version) {
+      const cacheKey = `v-${version}-${os.platform()}-${arch}`
+      await cache.saveCache([binPath], cacheKey)
+      core.info(`Saved V ${version} to cache`)
+    }
 
     const vBinPath = path.join(binPath, 'v')
     core.setOutput('bin-path', binPath)
