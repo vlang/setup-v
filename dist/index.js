@@ -14277,20 +14277,16 @@ var require_permessage_deflate$1 = /* @__PURE__ */ __commonJSMin(((exports, modu
 		/** @type {import('node:zlib').InflateRaw} */
 		#inflate;
 		#options = {};
-		/** @type {number} */
-		#maxDecompressedSize;
 		/** @type {boolean} */
 		#aborted = false;
 		/** @type {Function|null} */
 		#currentCallback = null;
 		/**
 		* @param {Map<string, string>} extensions
-		* @param {{ maxDecompressedMessageSize?: number }} [options]
 		*/
-		constructor(extensions, options = {}) {
+		constructor(extensions) {
 			this.#options.serverNoContextTakeover = extensions.has("server_no_context_takeover");
 			this.#options.serverMaxWindowBits = extensions.get("server_max_window_bits");
-			this.#maxDecompressedSize = options.maxDecompressedMessageSize ?? kDefaultMaxDecompressedSize;
 		}
 		decompress(chunk, fin, callback) {
 			if (this.#aborted) {
@@ -14317,7 +14313,7 @@ var require_permessage_deflate$1 = /* @__PURE__ */ __commonJSMin(((exports, modu
 				this.#inflate.on("data", (data) => {
 					if (this.#aborted) return;
 					this.#inflate[kLength] += data.length;
-					if (this.#inflate[kLength] > this.#maxDecompressedSize) {
+					if (this.#inflate[kLength] > kDefaultMaxDecompressedSize) {
 						this.#aborted = true;
 						this.#inflate.removeAllListeners();
 						this.#inflate.destroy();
@@ -14372,19 +14368,15 @@ var require_receiver$2 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		#fragments = [];
 		/** @type {Map<string, PerMessageDeflate>} */
 		#extensions;
-		/** @type {{ maxDecompressedMessageSize?: number }} */
-		#options;
 		/**
 		* @param {import('./websocket').WebSocket} ws
 		* @param {Map<string, string>|null} extensions
-		* @param {{ maxDecompressedMessageSize?: number }} [options]
 		*/
-		constructor(ws, extensions, options = {}) {
+		constructor(ws, extensions) {
 			super();
 			this.ws = ws;
 			this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
-			this.#options = options;
-			if (this.#extensions.has("permessage-deflate")) this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
+			if (this.#extensions.has("permessage-deflate")) this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions));
 		}
 		/**
 		* @param {Buffer} chunk
@@ -14733,8 +14725,6 @@ var require_websocket$2 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		#extensions = "";
 		/** @type {SendQueue} */
 		#sendQueue;
-		/** @type {{ maxDecompressedMessageSize?: number }} */
-		#options;
 		/**
 		* @param {string} url
 		* @param {string|string[]} protocols
@@ -14762,7 +14752,6 @@ var require_websocket$2 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 			if (protocols.length !== new Set(protocols.map((p) => p.toLowerCase())).size) throw new DOMException("Invalid Sec-WebSocket-Protocol value", "SyntaxError");
 			if (protocols.length > 0 && !protocols.every((p) => isValidSubprotocol(p))) throw new DOMException("Invalid Sec-WebSocket-Protocol value", "SyntaxError");
 			this[kWebSocketURL] = new URL(urlRecord.href);
-			this.#options = { maxDecompressedMessageSize: options.maxDecompressedMessageSize };
 			const client = environmentSettingsObject.settingsObject;
 			this[kController] = establishWebSocketConnection(urlRecord, protocols, client, this, (response, extensions) => this.#onConnectionEstablished(response, extensions), options);
 			this[kReadyState] = WebSocket.CONNECTING;
@@ -14905,7 +14894,7 @@ var require_websocket$2 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		*/
 		#onConnectionEstablished(response, parsedExtensions) {
 			this[kResponse] = response;
-			const parser = new ByteParser(this, parsedExtensions, this.#options);
+			const parser = new ByteParser(this, parsedExtensions);
 			parser.on("drain", onParserDrain);
 			parser.on("error", onParserError.bind(this));
 			response.socket.ws = this;
@@ -14972,17 +14961,6 @@ var require_websocket$2 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		{
 			key: "headers",
 			converter: webidl.nullableConverter(webidl.converters.HeadersInit)
-		},
-		{
-			key: "maxDecompressedMessageSize",
-			converter: webidl.nullableConverter((V) => {
-				V = webidl.converters["unsigned long long"](V);
-				if (V <= 0) throw webidl.errors.exception({
-					header: "WebSocket constructor",
-					message: "maxDecompressedMessageSize must be greater than 0"
-				});
-				return V;
-			})
 		}
 	]);
 	webidl.converters["DOMString or sequence<DOMString> or WebSocketInit"] = function(V) {
@@ -31186,20 +31164,16 @@ var require_permessage_deflate = /* @__PURE__ */ __commonJSMin(((exports, module
 		/** @type {import('node:zlib').InflateRaw} */
 		#inflate;
 		#options = {};
-		/** @type {number} */
-		#maxDecompressedSize;
 		/** @type {boolean} */
 		#aborted = false;
 		/** @type {Function|null} */
 		#currentCallback = null;
 		/**
 		* @param {Map<string, string>} extensions
-		* @param {{ maxDecompressedMessageSize?: number }} [options]
 		*/
-		constructor(extensions, options = {}) {
+		constructor(extensions) {
 			this.#options.serverNoContextTakeover = extensions.has("server_no_context_takeover");
 			this.#options.serverMaxWindowBits = extensions.get("server_max_window_bits");
-			this.#maxDecompressedSize = options.maxDecompressedMessageSize ?? kDefaultMaxDecompressedSize;
 		}
 		decompress(chunk, fin, callback) {
 			if (this.#aborted) {
@@ -31226,7 +31200,7 @@ var require_permessage_deflate = /* @__PURE__ */ __commonJSMin(((exports, module
 				this.#inflate.on("data", (data) => {
 					if (this.#aborted) return;
 					this.#inflate[kLength] += data.length;
-					if (this.#inflate[kLength] > this.#maxDecompressedSize) {
+					if (this.#inflate[kLength] > kDefaultMaxDecompressedSize) {
 						this.#aborted = true;
 						this.#inflate.removeAllListeners();
 						this.#inflate.destroy();
@@ -31281,19 +31255,15 @@ var require_receiver$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		#fragments = [];
 		/** @type {Map<string, PerMessageDeflate>} */
 		#extensions;
-		/** @type {{ maxDecompressedMessageSize?: number }} */
-		#options;
 		/**
 		* @param {import('./websocket').WebSocket} ws
 		* @param {Map<string, string>|null} extensions
-		* @param {{ maxDecompressedMessageSize?: number }} [options]
 		*/
-		constructor(ws, extensions, options = {}) {
+		constructor(ws, extensions) {
 			super();
 			this.ws = ws;
 			this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
-			this.#options = options;
-			if (this.#extensions.has("permessage-deflate")) this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
+			if (this.#extensions.has("permessage-deflate")) this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions));
 		}
 		/**
 		* @param {Buffer} chunk
@@ -31642,8 +31612,6 @@ var require_websocket$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		#extensions = "";
 		/** @type {SendQueue} */
 		#sendQueue;
-		/** @type {{ maxDecompressedMessageSize?: number }} */
-		#options;
 		/**
 		* @param {string} url
 		* @param {string|string[]} protocols
@@ -31671,7 +31639,6 @@ var require_websocket$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 			if (protocols.length !== new Set(protocols.map((p) => p.toLowerCase())).size) throw new DOMException("Invalid Sec-WebSocket-Protocol value", "SyntaxError");
 			if (protocols.length > 0 && !protocols.every((p) => isValidSubprotocol(p))) throw new DOMException("Invalid Sec-WebSocket-Protocol value", "SyntaxError");
 			this[kWebSocketURL] = new URL(urlRecord.href);
-			this.#options = { maxDecompressedMessageSize: options.maxDecompressedMessageSize };
 			const client = environmentSettingsObject.settingsObject;
 			this[kController] = establishWebSocketConnection(urlRecord, protocols, client, this, (response, extensions) => this.#onConnectionEstablished(response, extensions), options);
 			this[kReadyState] = WebSocket.CONNECTING;
@@ -31814,7 +31781,7 @@ var require_websocket$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		*/
 		#onConnectionEstablished(response, parsedExtensions) {
 			this[kResponse] = response;
-			const parser = new ByteParser(this, parsedExtensions, this.#options);
+			const parser = new ByteParser(this, parsedExtensions);
 			parser.on("drain", onParserDrain);
 			parser.on("error", onParserError.bind(this));
 			response.socket.ws = this;
@@ -31881,17 +31848,6 @@ var require_websocket$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		{
 			key: "headers",
 			converter: webidl.nullableConverter(webidl.converters.HeadersInit)
-		},
-		{
-			key: "maxDecompressedMessageSize",
-			converter: webidl.nullableConverter((V) => {
-				V = webidl.converters["unsigned long long"](V);
-				if (V <= 0) throw webidl.errors.exception({
-					header: "WebSocket constructor",
-					message: "maxDecompressedMessageSize must be greater than 0"
-				});
-				return V;
-			})
 		}
 	]);
 	webidl.converters["DOMString or sequence<DOMString> or WebSocketInit"] = function(V) {

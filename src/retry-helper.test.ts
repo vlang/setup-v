@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
-import {RetryHelper} from '../src/retry-helper'
+import {RetryHelper} from './retry-helper'
+import {describe, beforeAll, beforeEach, afterAll, it, expect, vi} from 'vitest'
 
 let info: string[]
 let retryHelper: any
@@ -7,7 +8,7 @@ let retryHelper: any
 describe('retry-helper tests', () => {
   beforeAll(() => {
     // Mock @actions/core info()
-    jest.spyOn(core, 'info').mockImplementation((message: string) => {
+    vi.spyOn(core, 'info').mockImplementation((message: string) => {
       info.push(message)
     })
 
@@ -21,7 +22,7 @@ describe('retry-helper tests', () => {
 
   afterAll(() => {
     // Restore
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('first attempt succeeds', async () => {
