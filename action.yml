@@ -27,6 +27,9 @@ inputs:
     default: 'false'
   architecture:
     description: 'Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default.'
+  cache:
+    description: 'Cache the V executable to speed up subsequent runs. Only applies when the version input is specified.'
+    default: 'true'
 outputs:
   bin-path:
     description: 'Path to the directory that contains the V binary'

@@ -331,7 +331,8 @@ async function run() {
         if (!arch) {
             arch = os.arch();
         }
-        if (version) {
+        const useCache = strToBoolean(core.getInput('cache') || 'true');
+        if (useCache && version) {
             const cacheKey = `v-${version}-${os.platform()}-${arch}`;
             const installDir = installer.getInstallDir(arch);
             const hit = await cache.restoreCache([installDir], cacheKey);
@@ -361,7 +362,7 @@ async function run() {
         const cachedPath = await tc.cacheDir(binPath, 'v', installedVersion);
         core.info(`Cached v to: ${cachedPath}`);
         core.addPath(cachedPath);
-        if (version) {
+        if (useCache && version) {
             const cacheKey = `v-${version}-${os.platform()}-${arch}`;
             await cache.saveCache([binPath], cacheKey);
             core.info(`Saved V ${version} to cache`);
