@@ -388,7 +388,7 @@ function resolveVersionInput() {
         core.warning('Both version and version-file inputs are specified, only version will be used');
     }
     if (versionFileInput) {
-        const versionFilePath = path.join(process.env.GITHUB_WORKSPACE, versionFileInput);
+        const versionFilePath = path.join(process.env.GITHUB_WORKSPACE ?? '', versionFileInput);
         if (!fs.existsSync(versionFilePath)) {
             throw new Error(`The specified v version file at: ${versionFilePath} does not exist`);
         }

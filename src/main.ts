@@ -102,7 +102,7 @@ function resolveVersionInput(): string {
 
   if (versionFileInput) {
     const versionFilePath = path.join(
-      process.env.GITHUB_WORKSPACE!,
+      process.env.GITHUB_WORKSPACE ?? '',
       versionFileInput
     )
     if (!fs.existsSync(versionFilePath)) {
