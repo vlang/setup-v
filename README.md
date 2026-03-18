@@ -49,6 +49,11 @@ GitHub Action that allows you to setup a V environment.
 
     # Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default.
     architecture: ''
+
+    # Cache the V executable to speed up subsequent runs.
+    # Only applies when the `version` input is specified.
+    # Default: true
+    cache: true
 ```
 
 ## Output
