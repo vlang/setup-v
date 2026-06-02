@@ -217,6 +217,7 @@ exports.getVExecutable = getVExecutable;
 exports.isVInstalled = isVInstalled;
 exports.resolveVersionRef = resolveVersionRef;
 exports.getVlang = getVlang;
+exports.getWindowsBuildCommand = getWindowsBuildCommand;
 const core = __importStar(__nccwpck_require__(37484));
 const fs = __importStar(__nccwpck_require__(79896));
 const os = __importStar(__nccwpck_require__(70857));
@@ -271,12 +272,22 @@ async function getVlang({ authToken, version, checkLatest, stable, arch = os.arc
     }
     return installDir;
 }
+function getWindowsBuildCommand(installDir) {
+    if (fs.existsSync(path.join(installDir, 'makev.bat'))) {
+        return '.\\makev.bat -gcc';
+    }
+    if (fs.existsSync(path.join(installDir, 'make.bat'))) {
+        return '.\\make.bat -gcc';
+    }
+    throw new Error(`No Windows build script found in ${installDir}`);
+}
 function buildV(installDir) {
     if (process.platform === 'win32') {
-        // vlang/v CI builds Windows with makev.bat, not GNU make (see windows_ci_gcc.yml).
-        core.info('Running makev.bat -gcc...');
+        const command = getWindowsBuildCommand(installDir);
+        // vlang/v CI builds Windows with .\makev.bat (see windows_ci_gcc.yml).
+        core.info(`Running ${command}...`);
         // eslint-disable-next-line no-console
-        console.log((0, child_process_1.execSync)('makev.bat -gcc', {
+        console.log((0, child_process_1.execSync)(command, {
             cwd: installDir,
             shell: process.env.ComSpec ?? 'cmd.exe',
             stdio: 'pipe'
