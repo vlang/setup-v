@@ -213,6 +213,9 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getInstallDir = getInstallDir;
+exports.getVExecutable = getVExecutable;
+exports.isVInstalled = isVInstalled;
+exports.resolveVersionRef = resolveVersionRef;
 exports.getVlang = getVlang;
 const core = __importStar(__nccwpck_require__(37484));
 const fs = __importStar(__nccwpck_require__(79896));
@@ -228,29 +231,61 @@ function getInstallDir(arch = os.arch()) {
     const vlangDir = path.join(os.homedir(), 'vlang');
     return path.join(vlangDir, `vlang_${osPlat}_${osArch}`);
 }
+function getVExecutable(installDir) {
+    const executable = process.platform === 'win32' ? 'v.exe' : 'v';
+    return path.join(installDir, executable);
+}
+function isVInstalled(installDir) {
+    return fs.existsSync(getVExecutable(installDir));
+}
+async function resolveVersionRef(authToken, version, checkLatest, stable) {
+    if (version) {
+        return version;
+    }
+    if (stable) {
+        core.info('Checking latest stable release...');
+        return await (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
+    }
+    if (checkLatest) {
+        core.info('Checking latest commit from default branch...');
+        return '';
+    }
+    return version;
+}
 async function getVlang({ authToken, version, checkLatest, stable, arch = os.arch() }) {
     const installDir = getInstallDir(arch);
-    const vBinPath = path.join(installDir, 'v');
+    const vBinPath = getVExecutable(installDir);
     if (fs.existsSync(installDir)) {
-        return installDir;
-    }
-    let correctedRef = version;
-    if (checkLatest) {
-        core.info('Checking latest release...');
-        correctedRef = '';
-        if (stable) {
-            core.info('Checking latest stable release...');
-            correctedRef = await (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
+        if (isVInstalled(installDir)) {
+            core.info(`V already installed at ${installDir}`);
+            return installDir;
         }
+        core.warning(`Install directory exists but V executable is missing at ${installDir}. Re-downloading...`);
+        fs.rmSync(installDir, { recursive: true, force: true });
     }
-    core.info(`Downloading vlang ${correctedRef}...`);
+    const correctedRef = await resolveVersionRef(authToken, version, checkLatest, stable);
+    core.info(`Downloading vlang ${correctedRef || 'default branch'}...`);
     await (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, installDir, correctedRef);
     if (!fs.existsSync(vBinPath)) {
-        core.info('Running make...');
-        // eslint-disable-next-line no-console
-        console.log((0, child_process_1.execSync)(`make`, { cwd: installDir }).toString());
+        buildV(installDir);
     }
     return installDir;
+}
+function buildV(installDir) {
+    if (process.platform === 'win32') {
+        // vlang/v CI builds Windows with makev.bat, not GNU make (see windows_ci_gcc.yml).
+        core.info('Running makev.bat -gcc...');
+        // eslint-disable-next-line no-console
+        console.log((0, child_process_1.execSync)('makev.bat -gcc', {
+            cwd: installDir,
+            shell: process.env.ComSpec ?? 'cmd.exe',
+            stdio: 'pipe'
+        }).toString());
+        return;
+    }
+    core.info('Running make...');
+    // eslint-disable-next-line no-console
+    console.log((0, child_process_1.execSync)('make', { cwd: installDir, stdio: 'pipe' }).toString());
 }
 function translateArchToDistUrl(arch) {
     const platformMap = {
@@ -339,7 +374,7 @@ async function run() {
             if (hit) {
                 core.info(`Cache hit for V ${version}`);
                 core.addPath(installDir);
-                const vBinPath = path.join(installDir, 'v');
+                const vBinPath = installer.getVExecutable(installDir);
                 core.setOutput('bin-path', installDir);
                 core.setOutput('v-bin-path', vBinPath);
                 core.setOutput('version', version);
@@ -367,7 +402,7 @@ async function run() {
             await cache.saveCache([binPath], cacheKey);
             core.info(`Saved V ${version} to cache`);
         }
-        const vBinPath = path.join(binPath, 'v');
+        const vBinPath = installer.getVExecutable(binPath);
         core.setOutput('bin-path', binPath);
         core.setOutput('v-bin-path', vBinPath);
         core.setOutput('version', installedVersion);
@@ -410,8 +445,8 @@ function strToBoolean(str) {
     return !falsyValues.includes(str.toLowerCase());
 }
 async function getVersion(binPath) {
-    const vBinPath = path.join(binPath, 'v');
-    const { stdout, stderr } = await (0, exports.execer)(`${vBinPath} version`);
+    const vBinPath = installer.getVExecutable(binPath);
+    const { stdout, stderr } = await (0, exports.execer)(`"${vBinPath}" version`);
     if (stderr !== '') {
         throw new Error(`Unable to get version from ${vBinPath}`);
     }

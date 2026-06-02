@@ -23,7 +23,7 @@ inputs:
     description: 'Set this option if you want the action to check for the latest available version of V. If `stable` is false, it will check for the latest commit from the default branch.'
     default: 'false'
   stable:
-    description: 'Set this option if you want the action to use the stable version of V'
+    description: 'Set this option if you want the action to use the stable version of V (latest GitHub release tag)'
     default: 'false'
   architecture:
     description: 'Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default.'

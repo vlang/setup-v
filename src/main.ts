@@ -42,7 +42,7 @@ async function run(): Promise<void> {
       if (hit) {
         core.info(`Cache hit for V ${version}`)
         core.addPath(installDir)
-        const vBinPath = path.join(installDir, 'v')
+        const vBinPath = installer.getVExecutable(installDir)
         core.setOutput('bin-path', installDir)
         core.setOutput('v-bin-path', vBinPath)
         core.setOutput('version', version)
@@ -76,7 +76,7 @@ async function run(): Promise<void> {
       core.info(`Saved V ${version} to cache`)
     }
 
-    const vBinPath = path.join(binPath, 'v')
+    const vBinPath = installer.getVExecutable(binPath)
     core.setOutput('bin-path', binPath)
     core.setOutput('v-bin-path', vBinPath)
     core.setOutput('version', installedVersion)
@@ -136,9 +136,9 @@ function strToBoolean(str: string): boolean {
 }
 
 async function getVersion(binPath: string): Promise<string> {
-  const vBinPath = path.join(binPath, 'v')
+  const vBinPath = installer.getVExecutable(binPath)
 
-  const {stdout, stderr} = await execer(`${vBinPath} version`)
+  const {stdout, stderr} = await execer(`"${vBinPath}" version`)
 
   if (stderr !== '') {
     throw new Error(`Unable to get version from ${vBinPath}`)
