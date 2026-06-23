@@ -14,9 +14,16 @@ export interface GetVlangRequest {
   checkLatest: boolean
   stable?: boolean
   arch?: string
+  installPath?: string
 }
 
-export function getInstallDir(arch: string = os.arch()): string {
+export function getInstallDir(
+  arch: string = os.arch(),
+  customPath?: string
+): string {
+  if (customPath) {
+    return path.resolve(customPath)
+  }
   const osPlat: string = os.platform()
   const osArch: string = translateArchToDistUrl(arch)
   const vlangDir = path.join(os.homedir(), 'vlang')
@@ -64,9 +71,10 @@ export async function getVlang({
   version,
   checkLatest,
   stable,
-  arch = os.arch()
+  arch = os.arch(),
+  installPath
 }: GetVlangRequest): Promise<string> {
-  const installDir = getInstallDir(arch)
+  const installDir = getInstallDir(arch, installPath)
   const vBinPath = getVExecutable(installDir)
 
   if (fs.existsSync(installDir)) {
