@@ -2,7 +2,11 @@ import {describe, expect, test, vi, beforeEach, afterEach} from 'vitest'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import {getVExecutable, getWindowsBuildCommand, resolveVersionRef} from './installer'
+import {
+  getVExecutable,
+  getWindowsBuildCommand,
+  resolveVersionRef
+} from './installer'
 import * as githubApiHelper from './github-api-helper'
 
 describe('getVExecutable', () => {
@@ -62,17 +66,30 @@ describe('getWindowsBuildCommand', () => {
     }
   })
 
-  test('prefers makev.bat when present', () => {
+  test('prefers makev.bat when present (MSVC by default)', () => {
     fs.writeFileSync(path.join(tempDir, 'makev.bat'), '@echo off')
     fs.writeFileSync(path.join(tempDir, 'make.bat'), '@echo off')
 
-    expect(getWindowsBuildCommand(tempDir)).toBe('.\\makev.bat -gcc')
+    expect(getWindowsBuildCommand(tempDir)).toBe('.\\makev.bat')
   })
 
-  test('falls back to make.bat for older releases', () => {
+  test('uses makev.bat with -gcc when useGcc is true', () => {
+    fs.writeFileSync(path.join(tempDir, 'makev.bat'), '@echo off')
     fs.writeFileSync(path.join(tempDir, 'make.bat'), '@echo off')
 
-    expect(getWindowsBuildCommand(tempDir)).toBe('.\\make.bat -gcc')
+    expect(getWindowsBuildCommand(tempDir, true)).toBe('.\\makev.bat -gcc')
+  })
+
+  test('falls back to make.bat for older releases (MSVC by default)', () => {
+    fs.writeFileSync(path.join(tempDir, 'make.bat'), '@echo off')
+
+    expect(getWindowsBuildCommand(tempDir)).toBe('.\\make.bat')
+  })
+
+  test('falls back to make.bat with -gcc when useGcc is true', () => {
+    fs.writeFileSync(path.join(tempDir, 'make.bat'), '@echo off')
+
+    expect(getWindowsBuildCommand(tempDir, true)).toBe('.\\make.bat -gcc')
   })
 
   test('throws when no build script exists', () => {
