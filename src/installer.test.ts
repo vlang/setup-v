@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import {
+  cleanInstallation,
   getInstallDir,
   getVExecutable,
   getWindowsBuildCommand,
@@ -125,5 +126,147 @@ describe('getWindowsBuildCommand', () => {
     expect(() => getWindowsBuildCommand(tempDir)).toThrow(
       'No Windows build script found'
     )
+  })
+})
+
+describe('cleanInstallation', () => {
+  let tempDir = ''
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-v-clean-'))
+  })
+
+  afterEach(() => {
+    if (tempDir) {
+      fs.rmSync(tempDir, {recursive: true, force: true})
+    }
+  })
+
+  function mockVInstallation(dir: string): void {
+    const nonEssentialDirs = [
+      'examples',
+      'tests',
+      'test',
+      'benchmarks',
+      'bench',
+      'doc',
+      'ci',
+      '.github',
+      '.git'
+    ]
+    for (const sub of nonEssentialDirs) {
+      const subDir = path.join(dir, sub)
+      fs.mkdirSync(subDir, {recursive: true})
+      fs.writeFileSync(path.join(subDir, 'stub.txt'), 'stub')
+    }
+
+    const nonEssentialFiles = [
+      'CHANGELOG.md',
+      'CONTRIBUTING.md',
+      'README.md',
+      'CODE_OF_CONDUCT.md'
+    ]
+    for (const file of nonEssentialFiles) {
+      fs.writeFileSync(path.join(dir, file), 'stub')
+    }
+
+    const essentialDirs = ['vlib', 'cmd', 'thirdparty']
+    for (const sub of essentialDirs) {
+      const subDir = path.join(dir, sub)
+      fs.mkdirSync(subDir, {recursive: true})
+      fs.writeFileSync(path.join(subDir, 'stub.txt'), 'stub')
+    }
+
+    const essentialFiles = [
+      'v',
+      'v.mod',
+      'GNUmakefile',
+      'makev.bat',
+      'make.bat'
+    ]
+    for (const file of essentialFiles) {
+      fs.writeFileSync(path.join(dir, file), 'stub')
+    }
+  }
+
+  test('removes non-essential directories', () => {
+    mockVInstallation(tempDir)
+
+    cleanInstallation(tempDir)
+
+    for (const dir of [
+      'examples',
+      'tests',
+      'test',
+      'benchmarks',
+      'bench',
+      'doc',
+      'ci',
+      '.github',
+      '.git'
+    ]) {
+      expect(fs.existsSync(path.join(tempDir, dir))).toBe(false)
+    }
+  })
+
+  test('removes non-essential files', () => {
+    mockVInstallation(tempDir)
+
+    cleanInstallation(tempDir)
+
+    for (const file of [
+      'CHANGELOG.md',
+      'CONTRIBUTING.md',
+      'README.md',
+      'CODE_OF_CONDUCT.md'
+    ]) {
+      expect(fs.existsSync(path.join(tempDir, file))).toBe(false)
+    }
+  })
+
+  test('keeps essential files and directories', () => {
+    mockVInstallation(tempDir)
+
+    cleanInstallation(tempDir)
+
+    expect(fs.existsSync(getVExecutable(tempDir))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'vlib'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'cmd'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'thirdparty'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'v.mod'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'GNUmakefile'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'makev.bat'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'make.bat'))).toBe(true)
+  })
+
+  test('keeps essential file contents intact', () => {
+    mockVInstallation(tempDir)
+
+    cleanInstallation(tempDir)
+
+    expect(
+      fs.readFileSync(path.join(tempDir, 'vlib', 'stub.txt'), 'utf8')
+    ).toBe('stub')
+    expect(fs.readFileSync(path.join(tempDir, 'cmd', 'stub.txt'), 'utf8')).toBe(
+      'stub'
+    )
+  })
+
+  test('does not throw when install dir has nothing to clean', () => {
+    fs.writeFileSync(path.join(tempDir, 'v'), 'stub')
+    fs.mkdirSync(path.join(tempDir, 'vlib'), {recursive: true})
+
+    expect(() => cleanInstallation(tempDir)).not.toThrow()
+    expect(fs.existsSync(getVExecutable(tempDir))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'vlib'))).toBe(true)
+  })
+
+  test('is idempotent', () => {
+    mockVInstallation(tempDir)
+
+    expect(() => {
+      cleanInstallation(tempDir)
+      cleanInstallation(tempDir)
+    }).not.toThrow()
   })
 })

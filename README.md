@@ -59,6 +59,12 @@ GitHub Action that allows you to setup a V environment.
     # Only applies when the `version` input is specified.
     # Default: true
     cache: true
+
+    # Remove non-essential files (examples, tests, benchmarks, docs) from the
+    # V installation directory after building. This prevents V's own repository
+    # files from interfering with project-level commands like `v fmt -verify .`.
+    # Default: true
+    clean: true
 ```
 
 ## Output

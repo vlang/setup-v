@@ -8,6 +8,24 @@ import {execSync} from 'child_process'
 const VLANG_GITHUB_OWNER = 'vlang'
 const VLANG_GITHUB_REPO = 'v'
 
+const NON_ESSENTIAL_DIRS = [
+  'examples',
+  'tests',
+  'test',
+  'benchmarks',
+  'bench',
+  'doc',
+  'ci',
+  '.github',
+  '.git'
+]
+const NON_ESSENTIAL_FILES = [
+  'CHANGELOG.md',
+  'CONTRIBUTING.md',
+  'README.md',
+  'CODE_OF_CONDUCT.md'
+]
+
 export interface GetVlangRequest {
   authToken: string
   version: string
@@ -15,6 +33,7 @@ export interface GetVlangRequest {
   stable?: boolean
   arch?: string
   installPath?: string
+  clean?: boolean
 }
 
 export function getInstallDir(
@@ -72,7 +91,8 @@ export async function getVlang({
   checkLatest,
   stable,
   arch = os.arch(),
-  installPath
+  installPath,
+  clean = true
 }: GetVlangRequest): Promise<string> {
   const installDir = getInstallDir(arch, installPath)
   const vBinPath = getVExecutable(installDir)
@@ -108,6 +128,10 @@ export async function getVlang({
 
   if (!fs.existsSync(vBinPath)) {
     buildV(installDir)
+  }
+
+  if (clean) {
+    cleanInstallation(installDir)
   }
 
   return installDir
@@ -167,6 +191,24 @@ function buildV(installDir: string): void {
   core.info('Running make...')
   // eslint-disable-next-line no-console
   console.log(execSync('make', {cwd: installDir, stdio: 'pipe'}).toString())
+}
+
+export function cleanInstallation(installDir: string): void {
+  core.info(`Cleaning non-essential files from ${installDir}...`)
+
+  for (const dir of NON_ESSENTIAL_DIRS) {
+    const dirPath = path.join(installDir, dir)
+    if (fs.existsSync(dirPath)) {
+      fs.rmSync(dirPath, {recursive: true, force: true})
+    }
+  }
+
+  for (const file of NON_ESSENTIAL_FILES) {
+    const filePath = path.join(installDir, file)
+    if (fs.existsSync(filePath)) {
+      fs.rmSync(filePath, {force: true})
+    }
+  }
 }
 
 function translateArchToDistUrl(arch: string): string {
