@@ -289,7 +289,19 @@ async function getVlang({ authToken, version, checkLatest, stable, arch = os.arc
     core.info(`Downloading vlang ${correctedRef || 'default branch'}...`);
     await (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, installDir, correctedRef);
     if (!fs.existsSync(vBinPath)) {
-        buildV(installDir);
+        try {
+            buildV(installDir);
+        }
+        catch (error) {
+            const firstError = error instanceof Error ? error.message : String(error);
+            core.warning(`Initial V build failed, retrying once...\n${firstError}`);
+            try {
+                buildV(installDir);
+            }
+            catch (retryError) {
+                throw new Error(buildFailureMessage(retryError));
+            }
+        }
     }
     if (clean) {
         cleanInstallation(installDir);
@@ -307,6 +319,8 @@ function getWindowsBuildCommand(installDir, useGcc = false) {
     throw new Error(`No Windows build script found in ${installDir}`);
 }
 function buildV(installDir) {
+    let command;
+    let shell;
     if (process.platform === 'win32') {
         // GHA Windows runners ship MSVC (Visual Studio Build Tools), which
         // provides the POSIX-compatible headers V needs to bootstrap. MinGW
@@ -314,31 +328,60 @@ function buildV(installDir) {
         // first and fall back to GCC only if the MSVC build fails.
         try {
             const msvcCommand = getWindowsBuildCommand(installDir, false);
-            core.info(`Running ${msvcCommand} (MSVC)...`);
             // eslint-disable-next-line no-console
-            console.log((0, child_process_1.execSync)(msvcCommand, {
+            console.log(runBuildCommand(msvcCommand, {
                 cwd: installDir,
-                shell: process.env.ComSpec ?? 'cmd.exe',
-                stdio: 'pipe'
-            }).toString());
+                shell: process.env.ComSpec ?? 'cmd.exe'
+            }));
         }
         catch (msvcError) {
             const msvcMessage = msvcError instanceof Error ? msvcError.message : String(msvcError);
             core.warning(`MSVC build failed (${msvcMessage}), falling back to GCC (MinGW)...`);
             const gccCommand = getWindowsBuildCommand(installDir, true);
-            core.info(`Running ${gccCommand} (GCC)...`);
             // eslint-disable-next-line no-console
-            console.log((0, child_process_1.execSync)(gccCommand, {
+            console.log(runBuildCommand(gccCommand, {
                 cwd: installDir,
-                shell: process.env.ComSpec ?? 'cmd.exe',
-                stdio: 'pipe'
-            }).toString());
+                shell: process.env.ComSpec ?? 'cmd.exe'
+            }));
         }
         return;
     }
-    core.info('Running make...');
+    else {
+        command = 'make';
+    }
     // eslint-disable-next-line no-console
-    console.log((0, child_process_1.execSync)('make', { cwd: installDir, stdio: 'pipe' }).toString());
+    console.log(runBuildCommand(command, { cwd: installDir, shell }));
+}
+function runBuildCommand(command, options) {
+    core.info(`Running ${command}...`);
+    try {
+        return (0, child_process_1.execSync)(command, {
+            cwd: options.cwd,
+            shell: options.shell,
+            stdio: 'pipe'
+        }).toString();
+    }
+    catch (error) {
+        const cmdError = error;
+        const stderrText = cmdError.stderr?.toString() ?? '';
+        const stdoutText = cmdError.stdout?.toString() ?? '';
+        const parts = [`Command '${command}' failed in ${options.cwd}`];
+        if (stderrText) {
+            parts.push(`stderr:\n${stderrText}`);
+        }
+        if (stdoutText) {
+            parts.push(`stdout:\n${stdoutText}`);
+        }
+        throw new Error(parts.join('\n'));
+    }
+}
+function buildFailureMessage(error) {
+    const buildError = error instanceof Error ? error.message : String(error);
+    return (`Failed to build V from source.\n\n` +
+        `Build error:\n${buildError}\n\n` +
+        `This may be a transient issue with the V upstream bootstrap. ` +
+        `Try using \`stable: true\` to install the latest stable release, ` +
+        `or specify a specific version with the \`version\` input.`);
 }
 function cleanInstallation(installDir) {
     core.info(`Cleaning non-essential files from ${installDir}...`);

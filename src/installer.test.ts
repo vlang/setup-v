@@ -1,4 +1,5 @@
 import {describe, expect, test, vi, beforeEach, afterEach} from 'vitest'
+import * as cp from 'child_process'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
@@ -6,10 +7,21 @@ import {
   cleanInstallation,
   getInstallDir,
   getVExecutable,
+  getVlang,
   getWindowsBuildCommand,
   resolveVersionRef
 } from './installer'
 import * as githubApiHelper from './github-api-helper'
+
+interface CommandError extends Error {
+  stdout?: Buffer
+  stderr?: Buffer
+}
+
+vi.mock('child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('child_process')>()
+  return {...actual, execSync: vi.fn()}
+})
 
 describe('getVExecutable', () => {
   const platformSpy = vi.spyOn(process, 'platform', 'get')
@@ -268,5 +280,72 @@ describe('cleanInstallation', () => {
       cleanInstallation(tempDir)
       cleanInstallation(tempDir)
     }).not.toThrow()
+  })
+})
+
+describe('getVlang build failure handling', () => {
+  let tempHome = ''
+  let originalHome: string | undefined
+
+  beforeEach(() => {
+    tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-v-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = tempHome
+    vi.spyOn(githubApiHelper, 'downloadRepository').mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.mocked(cp.execSync).mockReset()
+    if (originalHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = originalHome
+    }
+    if (tempHome) {
+      fs.rmSync(tempHome, {recursive: true, force: true})
+    }
+  })
+
+  test('throws a user-friendly error when the build fails', async () => {
+    const buildError = new Error('make failed') as CommandError
+    buildError.stdout = Buffer.from('compiling v.c...')
+    buildError.stderr = Buffer.from(
+      'error: unknown function: help.print_and_exit'
+    )
+    vi.mocked(cp.execSync).mockImplementation(() => {
+      throw buildError
+    })
+
+    await expect(
+      getVlang({
+        authToken: 'token',
+        version: '',
+        checkLatest: false,
+        stable: false
+      })
+    ).rejects.toThrow(
+      /Failed to build V from source[\s\S]*help\.print_and_exit[\s\S]*transient[\s\S]*stable: true/
+    )
+  })
+
+  test('retries the build once and succeeds on the second attempt', async () => {
+    const buildError = new Error('make failed') as CommandError
+    buildError.stderr = Buffer.from('error: transient hiccup')
+    vi.mocked(cp.execSync)
+      .mockImplementationOnce(() => {
+        throw buildError
+      })
+      .mockImplementationOnce(() => Buffer.from('build succeeded'))
+
+    const installDir = await getVlang({
+      authToken: 'token',
+      version: '',
+      checkLatest: false,
+      stable: false
+    })
+
+    expect(installDir).toBe(getInstallDir())
+    expect(vi.mocked(cp.execSync)).toHaveBeenCalledTimes(2)
   })
 })
