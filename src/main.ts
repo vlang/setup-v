@@ -34,10 +34,11 @@ async function run(): Promise<void> {
     }
 
     const useCache = strToBoolean(core.getInput('cache') || 'true')
+    const customPath = core.getInput('path')
 
     if (useCache && version) {
       const cacheKey = `v-${version}-${os.platform()}-${arch}`
-      const installDir = installer.getInstallDir(arch)
+      const installDir = installer.getInstallDir(arch, customPath)
       const hit = await cache.restoreCache([installDir], cacheKey)
       if (hit) {
         core.info(`Cache hit for V ${version}`)
@@ -60,7 +61,8 @@ async function run(): Promise<void> {
       version,
       checkLatest,
       stable,
-      arch
+      arch,
+      installPath: customPath
     })
 
     core.info('Adding v to the cache...')

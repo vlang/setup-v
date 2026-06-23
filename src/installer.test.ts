@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import {
+  getInstallDir,
   getVExecutable,
   getWindowsBuildCommand,
   resolveVersionRef
@@ -50,6 +51,34 @@ describe('resolveVersionRef', () => {
 
   test('uses default branch when only check-latest is set', async () => {
     await expect(resolveVersionRef('token', '', true, false)).resolves.toBe('')
+  })
+})
+
+describe('getInstallDir', () => {
+  function expectedDefaultDir(arch: string = os.arch()): string {
+    const platformMap: Record<string, string> = {
+      darwin: 'macos',
+      win32: 'windows'
+    }
+    const osArch = platformMap[arch] || arch
+    return path.join(os.homedir(), 'vlang', `vlang_${os.platform()}_${osArch}`)
+  }
+
+  test('returns the default path when no custom path is provided', () => {
+    expect(getInstallDir()).toBe(expectedDefaultDir())
+  })
+
+  test('returns the custom path when provided', () => {
+    expect(getInstallDir('x64', '/opt/v')).toBe('/opt/v')
+  })
+
+  test('resolves a relative custom path to an absolute path', () => {
+    const result = getInstallDir('x64', 'custom-v')
+    expect(path.isAbsolute(result)).toBe(true)
+  })
+
+  test('ignores the custom path when it is an empty string', () => {
+    expect(getInstallDir('x64', '')).toBe(expectedDefaultDir('x64'))
   })
 })
 

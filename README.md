@@ -50,6 +50,11 @@ GitHub Action that allows you to setup a V environment.
     # Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default.
     architecture: ''
 
+    # Directory to install V into.
+    # Defaults to ~/vlang/vlang_{platform}_{arch} when not provided.
+    # Example: /opt/v
+    path: ''
+
     # Cache the V executable to speed up subsequent runs.
     # Only applies when the `version` input is specified.
     # Default: true

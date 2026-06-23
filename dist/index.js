@@ -226,7 +226,10 @@ const github_api_helper_1 = __nccwpck_require__(84985);
 const child_process_1 = __nccwpck_require__(35317);
 const VLANG_GITHUB_OWNER = 'vlang';
 const VLANG_GITHUB_REPO = 'v';
-function getInstallDir(arch = os.arch()) {
+function getInstallDir(arch = os.arch(), customPath) {
+    if (customPath) {
+        return path.resolve(customPath);
+    }
     const osPlat = os.platform();
     const osArch = translateArchToDistUrl(arch);
     const vlangDir = path.join(os.homedir(), 'vlang');
@@ -253,8 +256,8 @@ async function resolveVersionRef(authToken, version, checkLatest, stable) {
     }
     return version;
 }
-async function getVlang({ authToken, version, checkLatest, stable, arch = os.arch() }) {
-    const installDir = getInstallDir(arch);
+async function getVlang({ authToken, version, checkLatest, stable, arch = os.arch(), installPath }) {
+    const installDir = getInstallDir(arch, installPath);
     const vBinPath = getVExecutable(installDir);
     if (fs.existsSync(installDir)) {
         if (isVInstalled(installDir)) {
@@ -396,9 +399,10 @@ async function run() {
             arch = os.arch();
         }
         const useCache = strToBoolean(core.getInput('cache') || 'true');
+        const customPath = core.getInput('path');
         if (useCache && version) {
             const cacheKey = `v-${version}-${os.platform()}-${arch}`;
-            const installDir = installer.getInstallDir(arch);
+            const installDir = installer.getInstallDir(arch, customPath);
             const hit = await cache.restoreCache([installDir], cacheKey);
             if (hit) {
                 core.info(`Cache hit for V ${version}`);
@@ -419,7 +423,8 @@ async function run() {
             version,
             checkLatest,
             stable,
-            arch
+            arch,
+            installPath: customPath
         });
         core.info('Adding v to the cache...');
         const installedVersion = await getVersion(binPath);
