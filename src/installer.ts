@@ -127,7 +127,17 @@ export async function getVlang({
   )
 
   if (!fs.existsSync(vBinPath)) {
-    buildV(installDir)
+    try {
+      buildV(installDir)
+    } catch (error) {
+      const firstError = error instanceof Error ? error.message : String(error)
+      core.warning(`Initial V build failed, retrying once...\n${firstError}`)
+      try {
+        buildV(installDir)
+      } catch (retryError) {
+        throw new Error(buildFailureMessage(retryError))
+      }
+    }
   }
 
   if (clean) {
@@ -151,7 +161,15 @@ export function getWindowsBuildCommand(
   throw new Error(`No Windows build script found in ${installDir}`)
 }
 
+interface CommandError extends Error {
+  stdout?: Buffer
+  stderr?: Buffer
+}
+
 function buildV(installDir: string): void {
+  let command: string
+  let shell: string | undefined
+
   if (process.platform === 'win32') {
     // GHA Windows runners ship MSVC (Visual Studio Build Tools), which
     // provides the POSIX-compatible headers V needs to bootstrap. MinGW
@@ -159,14 +177,12 @@ function buildV(installDir: string): void {
     // first and fall back to GCC only if the MSVC build fails.
     try {
       const msvcCommand = getWindowsBuildCommand(installDir, false)
-      core.info(`Running ${msvcCommand} (MSVC)...`)
       // eslint-disable-next-line no-console
       console.log(
-        execSync(msvcCommand, {
+        runBuildCommand(msvcCommand, {
           cwd: installDir,
-          shell: process.env.ComSpec ?? 'cmd.exe',
-          stdio: 'pipe'
-        }).toString()
+          shell: process.env.ComSpec ?? 'cmd.exe'
+        })
       )
     } catch (msvcError) {
       const msvcMessage =
@@ -175,22 +191,58 @@ function buildV(installDir: string): void {
         `MSVC build failed (${msvcMessage}), falling back to GCC (MinGW)...`
       )
       const gccCommand = getWindowsBuildCommand(installDir, true)
-      core.info(`Running ${gccCommand} (GCC)...`)
       // eslint-disable-next-line no-console
       console.log(
-        execSync(gccCommand, {
+        runBuildCommand(gccCommand, {
           cwd: installDir,
-          shell: process.env.ComSpec ?? 'cmd.exe',
-          stdio: 'pipe'
-        }).toString()
+          shell: process.env.ComSpec ?? 'cmd.exe'
+        })
       )
     }
     return
+  } else {
+    command = 'make'
   }
 
-  core.info('Running make...')
   // eslint-disable-next-line no-console
-  console.log(execSync('make', {cwd: installDir, stdio: 'pipe'}).toString())
+  console.log(runBuildCommand(command, {cwd: installDir, shell}))
+}
+
+function runBuildCommand(
+  command: string,
+  options: {cwd: string; shell?: string}
+): string {
+  core.info(`Running ${command}...`)
+  try {
+    return execSync(command, {
+      cwd: options.cwd,
+      shell: options.shell,
+      stdio: 'pipe'
+    }).toString()
+  } catch (error) {
+    const cmdError = error as CommandError
+    const stderrText = cmdError.stderr?.toString() ?? ''
+    const stdoutText = cmdError.stdout?.toString() ?? ''
+    const parts = [`Command '${command}' failed in ${options.cwd}`]
+    if (stderrText) {
+      parts.push(`stderr:\n${stderrText}`)
+    }
+    if (stdoutText) {
+      parts.push(`stdout:\n${stdoutText}`)
+    }
+    throw new Error(parts.join('\n'))
+  }
+}
+
+function buildFailureMessage(error: unknown): string {
+  const buildError = error instanceof Error ? error.message : String(error)
+  return (
+    `Failed to build V from source.\n\n` +
+    `Build error:\n${buildError}\n\n` +
+    `This may be a transient issue with the V upstream bootstrap. ` +
+    `Try using \`stable: true\` to install the latest stable release, ` +
+    `or specify a specific version with the \`version\` input.`
+  )
 }
 
 export function cleanInstallation(installDir: string): void {

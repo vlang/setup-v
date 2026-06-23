@@ -76,6 +76,28 @@ This action will output the following variables:
 - `version`: Version of V that was used.
 - `architecture`: Architecture that was used to install V.
 
+## Troubleshooting
+
+### Build failures from source (`unknown function: ...`)
+
+When installing from the default branch, the action downloads the V source and
+builds it using the prebuilt C translation (`vc`). If the V source references
+functions that are not yet available in the prebuilt `vc` (a transient V
+upstream issue), the build can fail with errors such as:
+
+```
+error: unknown function: help.print_and_exit
+```
+
+This is usually a temporary V infrastructure issue. Workarounds:
+
+- Set `stable: true` to install the latest stable release instead of the
+  default branch.
+- Specify a concrete `version` (for example `weekly.2024.01` or a tag/SHA).
+
+The action retries the build once and, if it still fails, reports the original
+build output together with these suggestions.
+
 ## Contributors
 
 <a href="https://github.com/vlang/setup-v/contributors">
