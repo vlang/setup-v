@@ -272,26 +272,44 @@ async function getVlang({ authToken, version, checkLatest, stable, arch = os.arc
     }
     return installDir;
 }
-function getWindowsBuildCommand(installDir) {
+function getWindowsBuildCommand(installDir, useGcc = false) {
+    const gccFlag = useGcc ? ' -gcc' : '';
     if (fs.existsSync(path.join(installDir, 'makev.bat'))) {
-        return '.\\makev.bat -gcc';
+        return `.\\makev.bat${gccFlag}`;
     }
     if (fs.existsSync(path.join(installDir, 'make.bat'))) {
-        return '.\\make.bat -gcc';
+        return `.\\make.bat${gccFlag}`;
     }
     throw new Error(`No Windows build script found in ${installDir}`);
 }
 function buildV(installDir) {
     if (process.platform === 'win32') {
-        const command = getWindowsBuildCommand(installDir);
-        // vlang/v CI builds Windows with .\makev.bat (see windows_ci_gcc.yml).
-        core.info(`Running ${command}...`);
-        // eslint-disable-next-line no-console
-        console.log((0, child_process_1.execSync)(command, {
-            cwd: installDir,
-            shell: process.env.ComSpec ?? 'cmd.exe',
-            stdio: 'pipe'
-        }).toString());
+        // GHA Windows runners ship MSVC (Visual Studio Build Tools), which
+        // provides the POSIX-compatible headers V needs to bootstrap. MinGW
+        // (-gcc) lacks sys/mman.h, termios.h and pthread types, so try MSVC
+        // first and fall back to GCC only if the MSVC build fails.
+        try {
+            const msvcCommand = getWindowsBuildCommand(installDir, false);
+            core.info(`Running ${msvcCommand} (MSVC)...`);
+            // eslint-disable-next-line no-console
+            console.log((0, child_process_1.execSync)(msvcCommand, {
+                cwd: installDir,
+                shell: process.env.ComSpec ?? 'cmd.exe',
+                stdio: 'pipe'
+            }).toString());
+        }
+        catch (msvcError) {
+            const msvcMessage = msvcError instanceof Error ? msvcError.message : String(msvcError);
+            core.warning(`MSVC build failed (${msvcMessage}), falling back to GCC (MinGW)...`);
+            const gccCommand = getWindowsBuildCommand(installDir, true);
+            core.info(`Running ${gccCommand} (GCC)...`);
+            // eslint-disable-next-line no-console
+            console.log((0, child_process_1.execSync)(gccCommand, {
+                cwd: installDir,
+                shell: process.env.ComSpec ?? 'cmd.exe',
+                stdio: 'pipe'
+            }).toString());
+        }
         return;
     }
     core.info('Running make...');
