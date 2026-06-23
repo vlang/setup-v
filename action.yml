@@ -33,6 +33,9 @@ inputs:
   cache:
     description: 'Cache the V executable to speed up subsequent runs. Only applies when the version input is specified.'
     default: 'true'
+  clean:
+    description: 'Remove non-essential files (examples, tests, benchmarks, docs) from the V installation directory after building. Helps prevent interference with project-level V commands like fmt -verify.'
+    default: 'true'
 outputs:
   bin-path:
     description: 'Path to the directory that contains the V binary'

@@ -218,6 +218,7 @@ exports.isVInstalled = isVInstalled;
 exports.resolveVersionRef = resolveVersionRef;
 exports.getVlang = getVlang;
 exports.getWindowsBuildCommand = getWindowsBuildCommand;
+exports.cleanInstallation = cleanInstallation;
 const core = __importStar(__nccwpck_require__(37484));
 const fs = __importStar(__nccwpck_require__(79896));
 const os = __importStar(__nccwpck_require__(70857));
@@ -226,6 +227,23 @@ const github_api_helper_1 = __nccwpck_require__(84985);
 const child_process_1 = __nccwpck_require__(35317);
 const VLANG_GITHUB_OWNER = 'vlang';
 const VLANG_GITHUB_REPO = 'v';
+const NON_ESSENTIAL_DIRS = [
+    'examples',
+    'tests',
+    'test',
+    'benchmarks',
+    'bench',
+    'doc',
+    'ci',
+    '.github',
+    '.git'
+];
+const NON_ESSENTIAL_FILES = [
+    'CHANGELOG.md',
+    'CONTRIBUTING.md',
+    'README.md',
+    'CODE_OF_CONDUCT.md'
+];
 function getInstallDir(arch = os.arch(), customPath) {
     if (customPath) {
         return path.resolve(customPath);
@@ -256,7 +274,7 @@ async function resolveVersionRef(authToken, version, checkLatest, stable) {
     }
     return version;
 }
-async function getVlang({ authToken, version, checkLatest, stable, arch = os.arch(), installPath }) {
+async function getVlang({ authToken, version, checkLatest, stable, arch = os.arch(), installPath, clean = true }) {
     const installDir = getInstallDir(arch, installPath);
     const vBinPath = getVExecutable(installDir);
     if (fs.existsSync(installDir)) {
@@ -272,6 +290,9 @@ async function getVlang({ authToken, version, checkLatest, stable, arch = os.arc
     await (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, installDir, correctedRef);
     if (!fs.existsSync(vBinPath)) {
         buildV(installDir);
+    }
+    if (clean) {
+        cleanInstallation(installDir);
     }
     return installDir;
 }
@@ -318,6 +339,21 @@ function buildV(installDir) {
     core.info('Running make...');
     // eslint-disable-next-line no-console
     console.log((0, child_process_1.execSync)('make', { cwd: installDir, stdio: 'pipe' }).toString());
+}
+function cleanInstallation(installDir) {
+    core.info(`Cleaning non-essential files from ${installDir}...`);
+    for (const dir of NON_ESSENTIAL_DIRS) {
+        const dirPath = path.join(installDir, dir);
+        if (fs.existsSync(dirPath)) {
+            fs.rmSync(dirPath, { recursive: true, force: true });
+        }
+    }
+    for (const file of NON_ESSENTIAL_FILES) {
+        const filePath = path.join(installDir, file);
+        if (fs.existsSync(filePath)) {
+            fs.rmSync(filePath, { force: true });
+        }
+    }
 }
 function translateArchToDistUrl(arch) {
     const platformMap = {
@@ -418,13 +454,15 @@ async function run() {
         const token = core.getInput('token', { required: true });
         const stable = strToBoolean(core.getInput('stable') || 'false');
         const checkLatest = strToBoolean(core.getInput('check-latest') || 'false');
+        const clean = strToBoolean(core.getInput('clean') || 'true');
         const binPath = await installer.getVlang({
             authToken: token,
             version,
             checkLatest,
             stable,
             arch,
-            installPath: customPath
+            installPath: customPath,
+            clean
         });
         core.info('Adding v to the cache...');
         const installedVersion = await getVersion(binPath);

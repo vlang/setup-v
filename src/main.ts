@@ -55,6 +55,7 @@ async function run(): Promise<void> {
     const token = core.getInput('token', {required: true})
     const stable = strToBoolean(core.getInput('stable') || 'false')
     const checkLatest = strToBoolean(core.getInput('check-latest') || 'false')
+    const clean = strToBoolean(core.getInput('clean') || 'true')
 
     const binPath = await installer.getVlang({
       authToken: token,
@@ -62,7 +63,8 @@ async function run(): Promise<void> {
       checkLatest,
       stable,
       arch,
-      installPath: customPath
+      installPath: customPath,
+      clean
     })
 
     core.info('Adding v to the cache...')
