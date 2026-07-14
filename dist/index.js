@@ -1,754 +1,6 @@
 require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
-/***/ 84985:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.downloadRepository = downloadRepository;
-exports.getLatestRelease = getLatestRelease;
-exports.getDefaultBranch = getDefaultBranch;
-const assert = __importStar(__nccwpck_require__(42613));
-const core = __importStar(__nccwpck_require__(37484));
-const fs = __importStar(__nccwpck_require__(79896));
-const github = __importStar(__nccwpck_require__(93228));
-const io = __importStar(__nccwpck_require__(94994));
-const path = __importStar(__nccwpck_require__(16928));
-const retryHelper = __importStar(__nccwpck_require__(44815));
-const toolCache = __importStar(__nccwpck_require__(33472));
-const uuid_1 = __nccwpck_require__(12048);
-const IS_WINDOWS = process.platform === 'win32';
-async function downloadRepository(authToken, owner, repo, installDir, ref, commit) {
-    // Determine the default branch
-    if (!ref && !commit) {
-        core.info('Determining the default branch');
-        ref = await getDefaultBranch(authToken, owner, repo);
-    }
-    // create directory if not exists
-    if (!fs.existsSync(installDir)) {
-        core.info(`Creating directory: ${installDir}`);
-        fs.mkdirSync(installDir, { recursive: true });
-    }
-    // Download the archive
-    let archiveData = await retryHelper.execute(async () => {
-        core.info('Downloading the archive');
-        return await downloadArchive(authToken, owner, repo, ref, commit);
-    });
-    // Write archive to disk
-    core.info('Writing archive to disk');
-    const uniqueId = (0, uuid_1.v4)();
-    const archivePath = path.join(installDir, `${uniqueId}.tar.gz`);
-    await fs.promises.writeFile(archivePath, archiveData);
-    archiveData = Buffer.from(''); // Free memory
-    // Extract archive
-    core.info('Extracting the archive');
-    const extractPath = path.join(installDir, uniqueId);
-    await io.mkdirP(extractPath);
-    if (IS_WINDOWS) {
-        await toolCache.extractZip(archivePath, extractPath);
-    }
-    else {
-        await toolCache.extractTar(archivePath, extractPath);
-    }
-    await io.rmRF(archivePath);
-    // Determine the path of the repository content. The archive contains
-    // a top-level folder and the repository content is inside.
-    const archiveFileNames = await fs.promises.readdir(extractPath);
-    assert.ok(archiveFileNames.length === 1, 'Expected exactly one directory inside archive');
-    const archiveVersion = archiveFileNames[0]; // The top-level folder name includes the short SHA
-    core.info(`Resolved version ${archiveVersion}`);
-    const tempInstallDir = path.join(extractPath, archiveVersion);
-    // Move the files
-    for (const fileName of await fs.promises.readdir(tempInstallDir)) {
-        const sourcePath = path.join(tempInstallDir, fileName);
-        const targetPath = path.join(installDir, fileName);
-        if (IS_WINDOWS) {
-            await io.cp(sourcePath, targetPath, { recursive: true }); // Copy on Windows (Windows Defender may have a lock)
-        }
-        else {
-            await io.mv(sourcePath, targetPath);
-        }
-    }
-    await io.rmRF(extractPath);
-}
-async function getLatestRelease(authToken, owner, repo) {
-    core.info('Retrieving the latest release');
-    const octokit = github.getOctokit(authToken);
-    const params = {
-        owner,
-        repo
-    };
-    const response = await octokit.rest.repos.getLatestRelease(params);
-    const result = response.data.tag_name;
-    core.info(`Latest release '${result}'`);
-    return result;
-}
-/**
- * Looks up the default branch name
- */
-async function getDefaultBranch(authToken, owner, repo) {
-    return await retryHelper.execute(async () => {
-        core.info('Retrieving the default branch name');
-        const octokit = github.getOctokit(authToken);
-        let result;
-        try {
-            // Get the default branch from the repo info
-            const response = await octokit.rest.repos.get({ owner, repo });
-            result = response.data.default_branch;
-            assert.ok(result, 'default_branch cannot be empty');
-        }
-        catch (err) {
-            // Handle .wiki repo
-            if (
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            err?.status === 404 &&
-                repo.toUpperCase().endsWith('.WIKI')) {
-                result = 'master';
-            }
-            // Otherwise error
-            else {
-                throw err;
-            }
-        }
-        // Print the default branch
-        core.info(`Default branch '${result}'`);
-        // Prefix with 'refs/heads'
-        if (!result.startsWith('refs/')) {
-            result = `refs/heads/${result}`;
-        }
-        return result;
-    });
-}
-async function downloadArchive(authToken, owner, repo, ref = '', commit = '') {
-    const octokit = github.getOctokit(authToken);
-    const params = {
-        owner,
-        repo,
-        ref: commit || ref
-    };
-    const download = IS_WINDOWS
-        ? octokit.rest.repos.downloadZipballArchive
-        : octokit.rest.repos.downloadTarballArchive;
-    const response = await download(params);
-    core.info(`Downloaded archive '${response.url}'`);
-    // @ts-ignore https://github.com/octokit/types.ts/issues/211
-    return Buffer.from(response.data);
-}
-
-
-/***/ }),
-
-/***/ 18328:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getInstallDir = getInstallDir;
-exports.getVExecutable = getVExecutable;
-exports.isVInstalled = isVInstalled;
-exports.resolveVersionRef = resolveVersionRef;
-exports.getVlang = getVlang;
-exports.getWindowsBuildCommand = getWindowsBuildCommand;
-exports.cleanInstallation = cleanInstallation;
-const core = __importStar(__nccwpck_require__(37484));
-const fs = __importStar(__nccwpck_require__(79896));
-const os = __importStar(__nccwpck_require__(70857));
-const path = __importStar(__nccwpck_require__(16928));
-const github_api_helper_1 = __nccwpck_require__(84985);
-const child_process_1 = __nccwpck_require__(35317);
-const VLANG_GITHUB_OWNER = 'vlang';
-const VLANG_GITHUB_REPO = 'v';
-const NON_ESSENTIAL_DIRS = [
-    'examples',
-    'tests',
-    'test',
-    'benchmarks',
-    'bench',
-    'doc',
-    'ci',
-    '.github',
-    '.git'
-];
-const NON_ESSENTIAL_FILES = [
-    'CHANGELOG.md',
-    'CONTRIBUTING.md',
-    'README.md',
-    'CODE_OF_CONDUCT.md'
-];
-function getInstallDir(arch = os.arch(), customPath) {
-    if (customPath) {
-        return path.resolve(customPath);
-    }
-    const osPlat = os.platform();
-    const osArch = translateArchToDistUrl(arch);
-    const vlangDir = path.join(os.homedir(), 'vlang');
-    return path.join(vlangDir, `vlang_${osPlat}_${osArch}`);
-}
-function getVExecutable(installDir) {
-    const executable = process.platform === 'win32' ? 'v.exe' : 'v';
-    return path.join(installDir, executable);
-}
-function isVInstalled(installDir) {
-    return fs.existsSync(getVExecutable(installDir));
-}
-async function resolveVersionRef(authToken, version, checkLatest, stable) {
-    if (version) {
-        return version;
-    }
-    if (stable) {
-        core.info('Checking latest stable release...');
-        return await (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
-    }
-    if (checkLatest) {
-        core.info('Checking latest commit from default branch...');
-        return '';
-    }
-    return version;
-}
-async function getVlang({ authToken, version, checkLatest, stable, arch = os.arch(), installPath, clean = true }) {
-    const installDir = getInstallDir(arch, installPath);
-    const vBinPath = getVExecutable(installDir);
-    if (fs.existsSync(installDir)) {
-        if (isVInstalled(installDir)) {
-            core.info(`V already installed at ${installDir}`);
-            return installDir;
-        }
-        core.warning(`Install directory exists but V executable is missing at ${installDir}. Re-downloading...`);
-        fs.rmSync(installDir, { recursive: true, force: true });
-    }
-    const correctedRef = await resolveVersionRef(authToken, version, checkLatest, stable);
-    core.info(`Downloading vlang ${correctedRef || 'default branch'}...`);
-    await (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, installDir, correctedRef);
-    if (!fs.existsSync(vBinPath)) {
-        try {
-            buildV(installDir);
-        }
-        catch (error) {
-            const firstError = error instanceof Error ? error.message : String(error);
-            core.warning(`Initial V build failed, retrying once...\n${firstError}`);
-            try {
-                buildV(installDir);
-            }
-            catch (retryError) {
-                throw new Error(buildFailureMessage(retryError));
-            }
-        }
-    }
-    if (clean) {
-        cleanInstallation(installDir);
-    }
-    return installDir;
-}
-function getWindowsBuildCommand(installDir, useGcc = false) {
-    const gccFlag = useGcc ? ' -gcc' : '';
-    if (fs.existsSync(path.join(installDir, 'makev.bat'))) {
-        return `.\\makev.bat${gccFlag}`;
-    }
-    if (fs.existsSync(path.join(installDir, 'make.bat'))) {
-        return `.\\make.bat${gccFlag}`;
-    }
-    throw new Error(`No Windows build script found in ${installDir}`);
-}
-function buildV(installDir) {
-    let command;
-    let shell;
-    if (process.platform === 'win32') {
-        // GHA Windows runners ship MSVC (Visual Studio Build Tools), which
-        // provides the POSIX-compatible headers V needs to bootstrap. MinGW
-        // (-gcc) lacks sys/mman.h, termios.h and pthread types, so try MSVC
-        // first and fall back to GCC only if the MSVC build fails.
-        try {
-            const msvcCommand = getWindowsBuildCommand(installDir, false);
-            // eslint-disable-next-line no-console
-            console.log(runBuildCommand(msvcCommand, {
-                cwd: installDir,
-                shell: process.env.ComSpec ?? 'cmd.exe'
-            }));
-        }
-        catch (msvcError) {
-            const msvcMessage = msvcError instanceof Error ? msvcError.message : String(msvcError);
-            core.warning(`MSVC build failed (${msvcMessage}), falling back to GCC (MinGW)...`);
-            const gccCommand = getWindowsBuildCommand(installDir, true);
-            // eslint-disable-next-line no-console
-            console.log(runBuildCommand(gccCommand, {
-                cwd: installDir,
-                shell: process.env.ComSpec ?? 'cmd.exe'
-            }));
-        }
-        return;
-    }
-    else {
-        command = 'make';
-    }
-    // eslint-disable-next-line no-console
-    console.log(runBuildCommand(command, { cwd: installDir, shell }));
-}
-function runBuildCommand(command, options) {
-    core.info(`Running ${command}...`);
-    try {
-        return (0, child_process_1.execSync)(command, {
-            cwd: options.cwd,
-            shell: options.shell,
-            stdio: 'pipe'
-        }).toString();
-    }
-    catch (error) {
-        const cmdError = error;
-        const stderrText = cmdError.stderr?.toString() ?? '';
-        const stdoutText = cmdError.stdout?.toString() ?? '';
-        const parts = [`Command '${command}' failed in ${options.cwd}`];
-        if (stderrText) {
-            parts.push(`stderr:\n${stderrText}`);
-        }
-        if (stdoutText) {
-            parts.push(`stdout:\n${stdoutText}`);
-        }
-        throw new Error(parts.join('\n'));
-    }
-}
-function buildFailureMessage(error) {
-    const buildError = error instanceof Error ? error.message : String(error);
-    return (`Failed to build V from source.\n\n` +
-        `Build error:\n${buildError}\n\n` +
-        `This may be a transient issue with the V upstream bootstrap. ` +
-        `Try using \`stable: true\` to install the latest stable release, ` +
-        `or specify a specific version with the \`version\` input.`);
-}
-function cleanInstallation(installDir) {
-    core.info(`Cleaning non-essential files from ${installDir}...`);
-    for (const dir of NON_ESSENTIAL_DIRS) {
-        const dirPath = path.join(installDir, dir);
-        if (fs.existsSync(dirPath)) {
-            fs.rmSync(dirPath, { recursive: true, force: true });
-        }
-    }
-    for (const file of NON_ESSENTIAL_FILES) {
-        const filePath = path.join(installDir, file);
-        if (fs.existsSync(filePath)) {
-            fs.rmSync(filePath, { force: true });
-        }
-    }
-}
-function translateArchToDistUrl(arch) {
-    const platformMap = {
-        darwin: 'macos',
-        win32: 'windows'
-    };
-    return platformMap[arch.toString()] || arch;
-}
-
-
-/***/ }),
-
-/***/ 25915:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.execer = void 0;
-exports.cleanup = cleanup;
-const cache = __importStar(__nccwpck_require__(5116));
-const core = __importStar(__nccwpck_require__(37484));
-const cp = __importStar(__nccwpck_require__(35317));
-const fs = __importStar(__nccwpck_require__(79896));
-const installer = __importStar(__nccwpck_require__(18328));
-const os = __importStar(__nccwpck_require__(70857));
-const path = __importStar(__nccwpck_require__(16928));
-const tc = __importStar(__nccwpck_require__(33472));
-const util = __importStar(__nccwpck_require__(39023));
-const state_helper_1 = __nccwpck_require__(18209);
-exports.execer = util.promisify(cp.exec);
-async function run() {
-    try {
-        //
-        // Version is optional.  If supplied, install / use from the tool cache
-        // If not supplied then task is still used to setup proxy, auth, etc...
-        //
-        const version = resolveVersionInput();
-        let arch = core.getInput('architecture');
-        // if architecture supplied but version is not
-        // if we don't throw a warning, the already installed x64 node will be used which is not probably what user meant.
-        if (arch && !version) {
-            core.warning('`architecture` is provided but `version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `version`');
-        }
-        if (!arch) {
-            arch = os.arch();
-        }
-        const useCache = strToBoolean(core.getInput('cache') || 'true');
-        const customPath = core.getInput('path');
-        if (useCache && version) {
-            const cacheKey = `v-${version}-${os.platform()}-${arch}`;
-            const installDir = installer.getInstallDir(arch, customPath);
-            const hit = await cache.restoreCache([installDir], cacheKey);
-            if (hit) {
-                core.info(`Cache hit for V ${version}`);
-                core.addPath(installDir);
-                const vBinPath = installer.getVExecutable(installDir);
-                core.setOutput('bin-path', installDir);
-                core.setOutput('v-bin-path', vBinPath);
-                core.setOutput('version', version);
-                core.setOutput('architecture', arch);
-                return;
-            }
-        }
-        const token = core.getInput('token', { required: true });
-        const stable = strToBoolean(core.getInput('stable') || 'false');
-        const checkLatest = strToBoolean(core.getInput('check-latest') || 'false');
-        const clean = strToBoolean(core.getInput('clean') || 'true');
-        const binPath = await installer.getVlang({
-            authToken: token,
-            version,
-            checkLatest,
-            stable,
-            arch,
-            installPath: customPath,
-            clean
-        });
-        core.info('Adding v to the cache...');
-        const installedVersion = await getVersion(binPath);
-        const cachedPath = await tc.cacheDir(binPath, 'v', installedVersion);
-        core.info(`Cached v to: ${cachedPath}`);
-        core.addPath(cachedPath);
-        if (useCache && version) {
-            const cacheKey = `v-${version}-${os.platform()}-${arch}`;
-            await cache.saveCache([binPath], cacheKey);
-            core.info(`Saved V ${version} to cache`);
-        }
-        const vBinPath = installer.getVExecutable(binPath);
-        core.setOutput('bin-path', binPath);
-        core.setOutput('v-bin-path', vBinPath);
-        core.setOutput('version', installedVersion);
-        core.setOutput('architecture', arch);
-    }
-    catch (error) {
-        if (error instanceof Error)
-            core.setFailed(error.message);
-    }
-}
-async function cleanup() {
-    // @todo: implement
-}
-function resolveVersionInput() {
-    let version = core.getInput('version');
-    const versionFileInput = core.getInput('version-file');
-    if (version && versionFileInput) {
-        core.warning('Both version and version-file inputs are specified, only version will be used');
-    }
-    if (versionFileInput) {
-        const versionFilePath = path.join(process.env.GITHUB_WORKSPACE ?? '', versionFileInput);
-        if (!fs.existsSync(versionFilePath)) {
-            throw new Error(`The specified v version file at: ${versionFilePath} does not exist`);
-        }
-        version = fs.readFileSync(versionFilePath, 'utf8');
-    }
-    version = parseVersionFile(version);
-    core.info(`Resolved ${versionFileInput} as ${version}`);
-    return version;
-}
-function parseVersionFile(contents) {
-    let version = contents.trim();
-    if (/^v\d/.test(version)) {
-        version = version.substring(1);
-    }
-    return version;
-}
-function strToBoolean(str) {
-    const falsyValues = ['false', 'no', '0', '', 'undefined', 'null'];
-    return !falsyValues.includes(str.toLowerCase());
-}
-async function getVersion(binPath) {
-    const vBinPath = installer.getVExecutable(binPath);
-    const { stdout, stderr } = await (0, exports.execer)(`"${vBinPath}" version`);
-    if (stderr !== '') {
-        throw new Error(`Unable to get version from ${vBinPath}`);
-    }
-    if (stdout !== '') {
-        return stdout.trim().split(' ')[1];
-    }
-    core.warning('Unable to get version from v executable.');
-    return '0.0.0';
-}
-if (state_helper_1.IS_POST) {
-    cleanup();
-}
-else {
-    run();
-}
-
-
-/***/ }),
-
-/***/ 44815:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RetryHelper = void 0;
-exports.execute = execute;
-const core = __importStar(__nccwpck_require__(37484));
-const wait_1 = __nccwpck_require__(36339);
-const defaultMaxAttempts = 3;
-const defaultMinSeconds = 10;
-const defaultMaxSeconds = 20;
-class RetryHelper {
-    maxAttempts;
-    minSeconds;
-    maxSeconds;
-    constructor(maxAttempts = defaultMaxAttempts, minSeconds = defaultMinSeconds, maxSeconds = defaultMaxSeconds) {
-        this.maxAttempts = maxAttempts;
-        this.minSeconds = Math.floor(minSeconds);
-        this.maxSeconds = Math.floor(maxSeconds);
-        if (this.minSeconds > this.maxSeconds) {
-            throw new Error('min seconds should be less than or equal to max seconds');
-        }
-    }
-    async execute(action) {
-        let attempt = 1;
-        while (attempt < this.maxAttempts) {
-            // Try
-            try {
-                return await action();
-            }
-            catch (err) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                core.info(err?.message);
-            }
-            // Sleep
-            const seconds = this.getSleepAmount();
-            core.info(`Waiting ${seconds} seconds before trying again`);
-            await this.sleep(seconds);
-            attempt++;
-        }
-        // Last attempt
-        return await action();
-    }
-    getSleepAmount() {
-        return (Math.floor(Math.random() * (this.maxSeconds - this.minSeconds + 1)) +
-            this.minSeconds);
-    }
-    async sleep(seconds) {
-        await (0, wait_1.wait)(seconds * 1000);
-    }
-}
-exports.RetryHelper = RetryHelper;
-async function execute(action) {
-    const retryHelper = new RetryHelper();
-    return await retryHelper.execute(action);
-}
-
-
-/***/ }),
-
-/***/ 18209:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.IS_POST = void 0;
-const core = __importStar(__nccwpck_require__(37484));
-/**
- * Indicates whether the POST action is running
- */
-exports.IS_POST = !!process.env['STATE_isPost'];
-// Publish a variable so that when the POST action runs, it can determine it should run the cleanup logic.
-// This is necessary since we don't have a separate entry point.
-if (!exports.IS_POST) {
-    core.saveState('isPost', 'true');
-}
-
-
-/***/ }),
-
-/***/ 36339:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.wait = wait;
-async function wait(milliseconds) {
-    return new Promise(resolve => {
-        if (isNaN(milliseconds)) {
-            throw new Error('milliseconds not a number');
-        }
-        setTimeout(() => resolve('done!'), milliseconds);
-    });
-}
-
-
-/***/ }),
-
 /***/ 5116:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -50282,6 +49534,759 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 30950:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.downloadRepository = downloadRepository;
+exports.getLatestRelease = getLatestRelease;
+exports.getDefaultBranch = getDefaultBranch;
+const assert = __importStar(__nccwpck_require__(42613));
+const core = __importStar(__nccwpck_require__(37484));
+const fs = __importStar(__nccwpck_require__(79896));
+const github = __importStar(__nccwpck_require__(93228));
+const io = __importStar(__nccwpck_require__(94994));
+const path = __importStar(__nccwpck_require__(16928));
+const retryHelper = __importStar(__nccwpck_require__(84522));
+const toolCache = __importStar(__nccwpck_require__(33472));
+const uuid_1 = __nccwpck_require__(12048);
+const IS_WINDOWS = process.platform === 'win32';
+async function downloadRepository(authToken, owner, repo, installDir, ref, commit) {
+    // Determine the default branch
+    if (!ref && !commit) {
+        core.info('Determining the default branch');
+        ref = await getDefaultBranch(authToken, owner, repo);
+    }
+    // create directory if not exists
+    if (!fs.existsSync(installDir)) {
+        core.info(`Creating directory: ${installDir}`);
+        fs.mkdirSync(installDir, { recursive: true });
+    }
+    // Download the archive
+    let archiveData = await retryHelper.execute(async () => {
+        core.info('Downloading the archive');
+        return await downloadArchive(authToken, owner, repo, ref, commit);
+    });
+    // Write archive to disk
+    core.info('Writing archive to disk');
+    const uniqueId = (0, uuid_1.v4)();
+    const archivePath = path.join(installDir, `${uniqueId}.tar.gz`);
+    await fs.promises.writeFile(archivePath, archiveData);
+    archiveData = Buffer.from(''); // Free memory
+    // Extract archive
+    core.info('Extracting the archive');
+    const extractPath = path.join(installDir, uniqueId);
+    await io.mkdirP(extractPath);
+    if (IS_WINDOWS) {
+        await toolCache.extractZip(archivePath, extractPath);
+    }
+    else {
+        await toolCache.extractTar(archivePath, extractPath);
+    }
+    await io.rmRF(archivePath);
+    // Determine the path of the repository content. The archive contains
+    // a top-level folder and the repository content is inside.
+    const archiveFileNames = await fs.promises.readdir(extractPath);
+    assert.ok(archiveFileNames.length === 1, 'Expected exactly one directory inside archive');
+    const archiveVersion = archiveFileNames[0]; // The top-level folder name includes the short SHA
+    core.info(`Resolved version ${archiveVersion}`);
+    const tempInstallDir = path.join(extractPath, archiveVersion);
+    // Move the files
+    for (const fileName of await fs.promises.readdir(tempInstallDir)) {
+        const sourcePath = path.join(tempInstallDir, fileName);
+        const targetPath = path.join(installDir, fileName);
+        if (IS_WINDOWS) {
+            await io.cp(sourcePath, targetPath, { recursive: true }); // Copy on Windows (Windows Defender may have a lock)
+        }
+        else {
+            await io.mv(sourcePath, targetPath);
+        }
+    }
+    await io.rmRF(extractPath);
+}
+async function getLatestRelease(authToken, owner, repo) {
+    core.info('Retrieving the latest release');
+    const octokit = github.getOctokit(authToken);
+    const params = {
+        owner,
+        repo
+    };
+    const response = await octokit.rest.repos.getLatestRelease(params);
+    const result = response.data.tag_name;
+    core.info(`Latest release '${result}'`);
+    return result;
+}
+/**
+ * Looks up the default branch name
+ */
+async function getDefaultBranch(authToken, owner, repo) {
+    return await retryHelper.execute(async () => {
+        core.info('Retrieving the default branch name');
+        const octokit = github.getOctokit(authToken);
+        let result;
+        try {
+            // Get the default branch from the repo info
+            const response = await octokit.rest.repos.get({ owner, repo });
+            result = response.data.default_branch;
+            assert.ok(result, 'default_branch cannot be empty');
+        }
+        catch (err) {
+            // Handle .wiki repo
+            if (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            err?.status === 404 &&
+                repo.toUpperCase().endsWith('.WIKI')) {
+                result = 'master';
+            }
+            // Otherwise error
+            else {
+                throw err;
+            }
+        }
+        // Print the default branch
+        core.info(`Default branch '${result}'`);
+        // Prefix with 'refs/heads'
+        if (!result.startsWith('refs/')) {
+            result = `refs/heads/${result}`;
+        }
+        return result;
+    });
+}
+async function downloadArchive(authToken, owner, repo, ref = '', commit = '') {
+    const octokit = github.getOctokit(authToken);
+    const params = {
+        owner,
+        repo,
+        ref: commit || ref
+    };
+    const download = IS_WINDOWS
+        ? octokit.rest.repos.downloadZipballArchive
+        : octokit.rest.repos.downloadTarballArchive;
+    const response = await download(params);
+    core.info(`Downloaded archive '${response.url}'`);
+    // @ts-ignore https://github.com/octokit/types.ts/issues/211
+    return Buffer.from(response.data);
+}
+
+
+/***/ }),
+
+/***/ 47651:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getInstallDir = getInstallDir;
+exports.getVExecutable = getVExecutable;
+exports.isVInstalled = isVInstalled;
+exports.resolveVersionRef = resolveVersionRef;
+exports.getVlang = getVlang;
+exports.getWindowsBuildCommand = getWindowsBuildCommand;
+exports.cleanInstallation = cleanInstallation;
+const core = __importStar(__nccwpck_require__(37484));
+const fs = __importStar(__nccwpck_require__(79896));
+const os = __importStar(__nccwpck_require__(70857));
+const path = __importStar(__nccwpck_require__(16928));
+const github_api_helper_1 = __nccwpck_require__(30950);
+const child_process_1 = __nccwpck_require__(35317);
+const VLANG_GITHUB_OWNER = 'vlang';
+const VLANG_GITHUB_REPO = 'v';
+const NON_ESSENTIAL_DIRS = [
+    'examples',
+    'tests',
+    'test',
+    'benchmarks',
+    'bench',
+    'doc',
+    'ci',
+    '.github',
+    '.git'
+];
+const NON_ESSENTIAL_FILES = [
+    'CHANGELOG.md',
+    'CONTRIBUTING.md',
+    'README.md',
+    'CODE_OF_CONDUCT.md'
+];
+function getInstallDir(arch = os.arch(), customPath) {
+    if (customPath) {
+        return path.resolve(customPath);
+    }
+    const osPlat = os.platform();
+    const osArch = translateArchToDistUrl(arch);
+    const vlangDir = path.join(os.homedir(), 'vlang');
+    return path.join(vlangDir, `vlang_${osPlat}_${osArch}`);
+}
+function getVExecutable(installDir) {
+    const executable = process.platform === 'win32' ? 'v.exe' : 'v';
+    return path.join(installDir, executable);
+}
+function isVInstalled(installDir) {
+    return fs.existsSync(getVExecutable(installDir));
+}
+async function resolveVersionRef(authToken, version, checkLatest, stable) {
+    if (version) {
+        return version;
+    }
+    if (stable) {
+        core.info('Checking latest stable release...');
+        return await (0, github_api_helper_1.getLatestRelease)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO);
+    }
+    if (checkLatest) {
+        core.info('Checking latest commit from default branch...');
+        return '';
+    }
+    return version;
+}
+async function getVlang({ authToken, version, checkLatest, stable, arch = os.arch(), installPath, clean = true }) {
+    const installDir = getInstallDir(arch, installPath);
+    const vBinPath = getVExecutable(installDir);
+    if (fs.existsSync(installDir)) {
+        if (isVInstalled(installDir)) {
+            core.info(`V already installed at ${installDir}`);
+            return installDir;
+        }
+        core.warning(`Install directory exists but V executable is missing at ${installDir}. Re-downloading...`);
+        fs.rmSync(installDir, { recursive: true, force: true });
+    }
+    const correctedRef = await resolveVersionRef(authToken, version, checkLatest, stable);
+    core.info(`Downloading vlang ${correctedRef || 'default branch'}...`);
+    await (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, installDir, correctedRef);
+    if (!fs.existsSync(vBinPath)) {
+        try {
+            buildV(installDir);
+        }
+        catch (error) {
+            const firstError = error instanceof Error ? error.message : String(error);
+            core.warning(`Initial V build failed, retrying once...\n${firstError}`);
+            try {
+                buildV(installDir);
+            }
+            catch (retryError) {
+                throw new Error(buildFailureMessage(retryError));
+            }
+        }
+    }
+    if (clean) {
+        cleanInstallation(installDir);
+    }
+    return installDir;
+}
+function getWindowsBuildCommand(installDir, useGcc = false) {
+    const gccFlag = useGcc ? ' -gcc' : '';
+    if (fs.existsSync(path.join(installDir, 'makev.bat'))) {
+        return `.\\makev.bat${gccFlag}`;
+    }
+    if (fs.existsSync(path.join(installDir, 'make.bat'))) {
+        return `.\\make.bat${gccFlag}`;
+    }
+    throw new Error(`No Windows build script found in ${installDir}`);
+}
+function buildV(installDir) {
+    let command;
+    let shell;
+    if (process.platform === 'win32') {
+        // GHA Windows runners ship MSVC (Visual Studio Build Tools), which
+        // provides the POSIX-compatible headers V needs to bootstrap. MinGW
+        // (-gcc) lacks sys/mman.h, termios.h and pthread types, so try MSVC
+        // first and fall back to GCC only if the MSVC build fails.
+        try {
+            const msvcCommand = getWindowsBuildCommand(installDir, false);
+            // eslint-disable-next-line no-console
+            console.log(runBuildCommand(msvcCommand, {
+                cwd: installDir,
+                shell: process.env.ComSpec ?? 'cmd.exe'
+            }));
+        }
+        catch (msvcError) {
+            const msvcMessage = msvcError instanceof Error ? msvcError.message : String(msvcError);
+            core.warning(`MSVC build failed (${msvcMessage}), falling back to GCC (MinGW)...`);
+            const gccCommand = getWindowsBuildCommand(installDir, true);
+            // eslint-disable-next-line no-console
+            console.log(runBuildCommand(gccCommand, {
+                cwd: installDir,
+                shell: process.env.ComSpec ?? 'cmd.exe'
+            }));
+        }
+        return;
+    }
+    else {
+        command = 'make';
+    }
+    // eslint-disable-next-line no-console
+    console.log(runBuildCommand(command, { cwd: installDir, shell }));
+}
+function runBuildCommand(command, options) {
+    core.info(`Running ${command}...`);
+    try {
+        return (0, child_process_1.execSync)(command, {
+            cwd: options.cwd,
+            shell: options.shell,
+            stdio: 'pipe'
+        }).toString();
+    }
+    catch (error) {
+        const cmdError = error;
+        const stderrText = cmdError.stderr?.toString() ?? '';
+        const stdoutText = cmdError.stdout?.toString() ?? '';
+        const parts = [`Command '${command}' failed in ${options.cwd}`];
+        if (stderrText) {
+            parts.push(`stderr:\n${stderrText}`);
+        }
+        if (stdoutText) {
+            parts.push(`stdout:\n${stdoutText}`);
+        }
+        throw new Error(parts.join('\n'));
+    }
+}
+function buildFailureMessage(error) {
+    const buildError = error instanceof Error ? error.message : String(error);
+    return (`Failed to build V from source.\n\n` +
+        `Build error:\n${buildError}\n\n` +
+        `This may be a transient issue with the V upstream bootstrap. ` +
+        `Try using \`stable: true\` to install the latest stable release, ` +
+        `or specify a specific version with the \`version\` input.`);
+}
+function cleanInstallation(installDir) {
+    core.info(`Cleaning non-essential files from ${installDir}...`);
+    for (const dir of NON_ESSENTIAL_DIRS) {
+        const dirPath = path.join(installDir, dir);
+        if (fs.existsSync(dirPath)) {
+            fs.rmSync(dirPath, { recursive: true, force: true });
+        }
+    }
+    for (const file of NON_ESSENTIAL_FILES) {
+        const filePath = path.join(installDir, file);
+        if (fs.existsSync(filePath)) {
+            fs.rmSync(filePath, { force: true });
+        }
+    }
+}
+function translateArchToDistUrl(arch) {
+    const platformMap = {
+        darwin: 'macos',
+        win32: 'windows'
+    };
+    return platformMap[arch.toString()] || arch;
+}
+
+
+/***/ }),
+
+/***/ 41730:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.execer = void 0;
+exports.run = run;
+exports.cleanup = cleanup;
+exports.resolveVersionInput = resolveVersionInput;
+exports.parseVersionFile = parseVersionFile;
+exports.strToBoolean = strToBoolean;
+exports.getVersion = getVersion;
+const cache = __importStar(__nccwpck_require__(5116));
+const core = __importStar(__nccwpck_require__(37484));
+const cp = __importStar(__nccwpck_require__(35317));
+const fs = __importStar(__nccwpck_require__(79896));
+const installer = __importStar(__nccwpck_require__(47651));
+const os = __importStar(__nccwpck_require__(70857));
+const path = __importStar(__nccwpck_require__(16928));
+const tc = __importStar(__nccwpck_require__(33472));
+const util = __importStar(__nccwpck_require__(39023));
+const state_helper_1 = __nccwpck_require__(87155);
+exports.execer = util.promisify(cp.exec);
+async function run() {
+    try {
+        //
+        // Version is optional.  If supplied, install / use from the tool cache
+        // If not supplied then task is still used to setup proxy, auth, etc...
+        //
+        const version = resolveVersionInput();
+        let arch = core.getInput('architecture');
+        // if architecture supplied but version is not
+        // if we don't throw a warning, the already installed x64 node will be used which is not probably what user meant.
+        if (arch && !version) {
+            core.warning('`architecture` is provided but `version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `version`');
+        }
+        if (!arch) {
+            arch = os.arch();
+        }
+        const useCache = strToBoolean(core.getInput('cache') || 'true');
+        const customPath = core.getInput('path');
+        if (useCache && version) {
+            const cacheKey = `v-${version}-${os.platform()}-${arch}`;
+            const installDir = installer.getInstallDir(arch, customPath);
+            const hit = await cache.restoreCache([installDir], cacheKey);
+            if (hit) {
+                core.info(`Cache hit for V ${version}`);
+                core.addPath(installDir);
+                const vBinPath = installer.getVExecutable(installDir);
+                core.setOutput('bin-path', installDir);
+                core.setOutput('v-bin-path', vBinPath);
+                core.setOutput('version', version);
+                core.setOutput('architecture', arch);
+                return;
+            }
+        }
+        const token = core.getInput('token', { required: true });
+        const stable = strToBoolean(core.getInput('stable') || 'false');
+        const checkLatest = strToBoolean(core.getInput('check-latest') || 'false');
+        const clean = strToBoolean(core.getInput('clean') || 'true');
+        const binPath = await installer.getVlang({
+            authToken: token,
+            version,
+            checkLatest,
+            stable,
+            arch,
+            installPath: customPath,
+            clean
+        });
+        core.info('Adding v to the cache...');
+        const installedVersion = await getVersion(binPath);
+        const cachedPath = await tc.cacheDir(binPath, 'v', installedVersion);
+        core.info(`Cached v to: ${cachedPath}`);
+        core.addPath(cachedPath);
+        if (useCache && version) {
+            const cacheKey = `v-${version}-${os.platform()}-${arch}`;
+            await cache.saveCache([binPath], cacheKey);
+            core.info(`Saved V ${version} to cache`);
+        }
+        const vBinPath = installer.getVExecutable(binPath);
+        core.setOutput('bin-path', binPath);
+        core.setOutput('v-bin-path', vBinPath);
+        core.setOutput('version', installedVersion);
+        core.setOutput('architecture', arch);
+    }
+    catch (error) {
+        if (error instanceof Error)
+            core.setFailed(error.message);
+    }
+}
+async function cleanup() {
+    // @todo: implement
+}
+function resolveVersionInput() {
+    let version = core.getInput('version');
+    const versionFileInput = core.getInput('version-file');
+    if (version && versionFileInput) {
+        core.warning('Both version and version-file inputs are specified, only version will be used');
+    }
+    if (versionFileInput) {
+        const versionFilePath = path.join(process.env.GITHUB_WORKSPACE ?? '', versionFileInput);
+        if (!fs.existsSync(versionFilePath)) {
+            throw new Error(`The specified v version file at: ${versionFilePath} does not exist`);
+        }
+        version = fs.readFileSync(versionFilePath, 'utf8');
+    }
+    version = parseVersionFile(version);
+    core.info(`Resolved ${versionFileInput} as ${version}`);
+    return version;
+}
+function parseVersionFile(contents) {
+    let version = contents.trim();
+    if (/^v\d/.test(version)) {
+        version = version.substring(1);
+    }
+    return version;
+}
+function strToBoolean(str) {
+    const falsyValues = ['false', 'no', '0', '', 'undefined', 'null'];
+    return !falsyValues.includes(str.toLowerCase());
+}
+async function getVersion(binPath) {
+    const vBinPath = installer.getVExecutable(binPath);
+    const { stdout, stderr } = await (0, exports.execer)(`"${vBinPath}" version`);
+    if (stderr !== '') {
+        throw new Error(`Unable to get version from ${vBinPath}`);
+    }
+    if (stdout !== '') {
+        return stdout.trim().split(' ')[1];
+    }
+    core.warning('Unable to get version from v executable.');
+    return '0.0.0';
+}
+if (state_helper_1.IS_POST) {
+    cleanup();
+}
+else {
+    run();
+}
+
+
+/***/ }),
+
+/***/ 84522:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.RetryHelper = void 0;
+exports.execute = execute;
+const core = __importStar(__nccwpck_require__(37484));
+const wait_1 = __nccwpck_require__(40910);
+const defaultMaxAttempts = 3;
+const defaultMinSeconds = 10;
+const defaultMaxSeconds = 20;
+class RetryHelper {
+    maxAttempts;
+    minSeconds;
+    maxSeconds;
+    constructor(maxAttempts = defaultMaxAttempts, minSeconds = defaultMinSeconds, maxSeconds = defaultMaxSeconds) {
+        this.maxAttempts = maxAttempts;
+        this.minSeconds = Math.floor(minSeconds);
+        this.maxSeconds = Math.floor(maxSeconds);
+        if (this.minSeconds > this.maxSeconds) {
+            throw new Error('min seconds should be less than or equal to max seconds');
+        }
+    }
+    async execute(action) {
+        let attempt = 1;
+        while (attempt < this.maxAttempts) {
+            // Try
+            try {
+                return await action();
+            }
+            catch (err) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                core.info(err?.message);
+            }
+            // Sleep
+            const seconds = this.getSleepAmount();
+            core.info(`Waiting ${seconds} seconds before trying again`);
+            await this.sleep(seconds);
+            attempt++;
+        }
+        // Last attempt
+        return await action();
+    }
+    getSleepAmount() {
+        return (Math.floor(Math.random() * (this.maxSeconds - this.minSeconds + 1)) +
+            this.minSeconds);
+    }
+    async sleep(seconds) {
+        await (0, wait_1.wait)(seconds * 1000);
+    }
+}
+exports.RetryHelper = RetryHelper;
+async function execute(action) {
+    const retryHelper = new RetryHelper();
+    return await retryHelper.execute(action);
+}
+
+
+/***/ }),
+
+/***/ 87155:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.IS_POST = void 0;
+const core = __importStar(__nccwpck_require__(37484));
+/**
+ * Indicates whether the POST action is running
+ */
+exports.IS_POST = !!process.env['STATE_isPost'];
+// Publish a variable so that when the POST action runs, it can determine it should run the cleanup logic.
+// This is necessary since we don't have a separate entry point.
+if (!exports.IS_POST) {
+    core.saveState('isPost', 'true');
+}
+
+
+/***/ }),
+
+/***/ 40910:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.wait = wait;
+async function wait(milliseconds) {
+    return new Promise(resolve => {
+        if (isNaN(milliseconds)) {
+            throw new Error('milliseconds not a number');
+        }
+        setTimeout(() => resolve('done!'), milliseconds);
+    });
+}
+
+
+/***/ }),
+
 /***/ 42078:
 /***/ ((module) => {
 
@@ -65187,6 +65192,24 @@ exports.StorageContextClient = StorageContextClient;
 
 /***/ }),
 
+/***/ 83627:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.KnownEncryptionAlgorithmType = void 0;
+/** Known values of {@link EncryptionAlgorithmType} that the service accepts. */
+var KnownEncryptionAlgorithmType;
+(function (KnownEncryptionAlgorithmType) {
+    KnownEncryptionAlgorithmType["AES256"] = "AES256";
+})(KnownEncryptionAlgorithmType || (exports.KnownEncryptionAlgorithmType = KnownEncryptionAlgorithmType = {}));
+//# sourceMappingURL=generatedModels.js.map
+
+/***/ }),
+
 /***/ 30247:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -75513,6 +75536,132 @@ exports.listType = {
 
 /***/ }),
 
+/***/ 56635:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=appendBlob.js.map
+
+/***/ }),
+
+/***/ 68355:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=blob.js.map
+
+/***/ }),
+
+/***/ 17188:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=blockBlob.js.map
+
+/***/ }),
+
+/***/ 15337:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=container.js.map
+
+/***/ }),
+
+/***/ 82354:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const tslib_1 = __nccwpck_require__(61860);
+tslib_1.__exportStar(__nccwpck_require__(26865), exports);
+tslib_1.__exportStar(__nccwpck_require__(15337), exports);
+tslib_1.__exportStar(__nccwpck_require__(68355), exports);
+tslib_1.__exportStar(__nccwpck_require__(14400), exports);
+tslib_1.__exportStar(__nccwpck_require__(56635), exports);
+tslib_1.__exportStar(__nccwpck_require__(17188), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 14400:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=pageBlob.js.map
+
+/***/ }),
+
+/***/ 26865:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=service.js.map
+
+/***/ }),
+
 /***/ 40535:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -78728,132 +78877,6 @@ const filterBlobsOperationSpec = {
 
 /***/ }),
 
-/***/ 56635:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=appendBlob.js.map
-
-/***/ }),
-
-/***/ 68355:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=blob.js.map
-
-/***/ }),
-
-/***/ 17188:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=blockBlob.js.map
-
-/***/ }),
-
-/***/ 15337:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=container.js.map
-
-/***/ }),
-
-/***/ 82354:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const tslib_1 = __nccwpck_require__(61860);
-tslib_1.__exportStar(__nccwpck_require__(26865), exports);
-tslib_1.__exportStar(__nccwpck_require__(15337), exports);
-tslib_1.__exportStar(__nccwpck_require__(68355), exports);
-tslib_1.__exportStar(__nccwpck_require__(14400), exports);
-tslib_1.__exportStar(__nccwpck_require__(56635), exports);
-tslib_1.__exportStar(__nccwpck_require__(17188), exports);
-//# sourceMappingURL=index.js.map
-
-/***/ }),
-
-/***/ 14400:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=pageBlob.js.map
-
-/***/ }),
-
-/***/ 26865:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=service.js.map
-
-/***/ }),
-
 /***/ 5313:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -78924,24 +78947,6 @@ class StorageClient extends coreHttpCompat.ExtendedServiceClient {
 }
 exports.StorageClient = StorageClient;
 //# sourceMappingURL=storageClient.js.map
-
-/***/ }),
-
-/***/ 83627:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.KnownEncryptionAlgorithmType = void 0;
-/** Known values of {@link EncryptionAlgorithmType} that the service accepts. */
-var KnownEncryptionAlgorithmType;
-(function (KnownEncryptionAlgorithmType) {
-    KnownEncryptionAlgorithmType["AES256"] = "AES256";
-})(KnownEncryptionAlgorithmType || (exports.KnownEncryptionAlgorithmType = KnownEncryptionAlgorithmType = {}));
-//# sourceMappingURL=generatedModels.js.map
 
 /***/ }),
 
@@ -92831,7 +92836,7 @@ module.exports = /*#__PURE__*/JSON.parse('[[[0,44],"disallowed_STD3_valid"],[[45
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
 /******/ 	// This entry module is referenced by other modules so it can't be inlined
-/******/ 	var __webpack_exports__ = __nccwpck_require__(25915);
+/******/ 	var __webpack_exports__ = __nccwpck_require__(41730);
 /******/ 	module.exports = __webpack_exports__;
 /******/ 	
 /******/ })()

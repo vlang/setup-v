@@ -11,7 +11,7 @@ import {IS_POST} from './state-helper'
 
 export const execer = util.promisify(cp.exec)
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   try {
     //
     // Version is optional.  If supplied, install / use from the tool cache
@@ -94,7 +94,7 @@ export async function cleanup(): Promise<void> {
   // @todo: implement
 }
 
-function resolveVersionInput(): string {
+export function resolveVersionInput(): string {
   let version = core.getInput('version')
   const versionFileInput = core.getInput('version-file')
 
@@ -123,7 +123,7 @@ function resolveVersionInput(): string {
   return version
 }
 
-function parseVersionFile(contents: string): string {
+export function parseVersionFile(contents: string): string {
   let version = contents.trim()
 
   if (/^v\d/.test(version)) {
@@ -133,13 +133,13 @@ function parseVersionFile(contents: string): string {
   return version
 }
 
-function strToBoolean(str: string): boolean {
+export function strToBoolean(str: string): boolean {
   const falsyValues = ['false', 'no', '0', '', 'undefined', 'null']
 
   return !falsyValues.includes(str.toLowerCase())
 }
 
-async function getVersion(binPath: string): Promise<string> {
+export async function getVersion(binPath: string): Promise<string> {
   const vBinPath = installer.getVExecutable(binPath)
 
   const {stdout, stderr} = await execer(`"${vBinPath}" version`)
