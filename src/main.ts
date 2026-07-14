@@ -22,10 +22,11 @@ async function run(): Promise<void> {
     let arch = core.getInput('architecture')
 
     // if architecture supplied but version is not
-    // if we don't throw a warning, the already installed x64 node will be used which is not probably what user meant.
+    // Without a warning, an existing installation with a different architecture
+    // may be used, which is likely not what the user intended.
     if (arch && !version) {
       core.warning(
-        '`architecture` is provided but `version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `version`'
+        '`architecture` is provided but `version` is missing. In this configuration, the version/architecture of V will not be changed. To fix this, provide `architecture` in combination with `version`'
       )
     }
 
