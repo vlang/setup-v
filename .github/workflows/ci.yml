@@ -42,7 +42,14 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        scenario: [check-latest, stable, version]
+        scenario:
+          - check-latest
+          - stable
+          - version
+          - version-file
+          - architecture
+          - cache-false
+          - clean-false
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -71,6 +78,42 @@ jobs:
         uses: ./
         with:
           version: '0.5.1'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create version file
+        if: matrix.scenario == 'version-file'
+        shell: bash
+        run: echo '0.5.1' > .v-version
+
+      - name: Run Action (version-file)
+        if: matrix.scenario == 'version-file'
+        uses: ./
+        with:
+          version-file: '.v-version'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Action (architecture)
+        if: matrix.scenario == 'architecture'
+        uses: ./
+        with:
+          version: '0.5.1'
+          architecture: 'x86_64'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Action (cache-false)
+        if: matrix.scenario == 'cache-false'
+        uses: ./
+        with:
+          version: '0.5.1'
+          cache: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Action (clean-false)
+        if: matrix.scenario == 'clean-false'
+        uses: ./
+        with:
+          version: '0.5.1'
+          clean: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test if the executable is available
