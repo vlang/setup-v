@@ -91,7 +91,18 @@ async function run(): Promise<void> {
 }
 
 export async function cleanup(): Promise<void> {
-  // @todo: implement
+  // The post-job step is documented to remove the PAT configured for this
+  // action. Best-effort: drop any git extraheader that may carry the token,
+  // and clear the GITHUB_TOKEN variable so later steps cannot reuse it.
+  try {
+    cp.execSync(
+      'git config --global --unset-all http.https://github.com/.extraheader',
+      {stdio: 'ignore'}
+    )
+  } catch {
+    // No extraheader was set (or git is unavailable) — nothing to clean up.
+  }
+  core.exportVariable('GITHUB_TOKEN', '')
 }
 
 function resolveVersionInput(): string {
