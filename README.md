@@ -17,7 +17,7 @@ GitHub Action that allows you to setup a V environment.
 ## Usage
 
 ```yaml
-- uses: vlang/setup-v@v1.4
+- uses: vlang/setup-v@v1.7
   with:
     # Personal access token (PAT) used to fetch the repository. The PAT is configured
     # with the local git config, which enables your scripts to run authenticated git
@@ -47,7 +47,7 @@ GitHub Action that allows you to setup a V environment.
     # Resolves the latest GitHub release tag. Can be combined with `check-latest`.
     stable: false
 
-    # Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default.
+    # Target architecture for V to use. Examples: x86_64, arm64, aarch64, riscv64. Uses the system architecture by default.
     architecture: ''
 
     # Directory to install V into.
