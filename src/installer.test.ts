@@ -451,5 +451,3 @@ describe('getVlang prebuilt install', () => {
     expect(resolvePrebuiltAssetName('freebsd', 'x64')).toBeUndefined()
   })
 })
-
-

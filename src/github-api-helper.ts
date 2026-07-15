@@ -161,7 +161,9 @@ export async function downloadPrebuilt(
     assetId = asset.id
   } catch (err) {
     core.info(
-      `Could not resolve release ${version} (${String(err)}); falling back to source build`
+      `Could not resolve release ${version} (${String(
+        err
+      )}); falling back to source build`
     )
     return false
   }
