@@ -1,11 +1,14 @@
 import * as assert from 'assert'
 import * as core from '@actions/core'
+import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as github from '@actions/github'
 import * as io from '@actions/io'
 import * as path from 'path'
 import * as retryHelper from './retry-helper'
 import * as toolCache from '@actions/tool-cache'
+import {getExpectedChecksum} from './checksums'
+export {getExpectedChecksum}
 import {v4 as uuid} from 'uuid'
 
 const IS_WINDOWS = process.platform === 'win32'
@@ -42,6 +45,13 @@ export async function downloadRepository(
   const archivePath = path.join(installDir, `${uniqueId}.tar.gz`)
   await fs.promises.writeFile(archivePath, archiveData)
   archiveData = Buffer.from('') // Free memory
+
+  // Log the source archive hash for transparency. GitHub-generated tarballs
+  // are not published with a checksum, so this is informational only and not
+  // used for verification (prebuilt release assets are the verified path).
+  core.info(
+    `Source archive SHA-256: ${computeSha256(archivePath)} (unverified)`
+  )
 
   // Extract archive
   core.info('Extracting the archive')
@@ -125,6 +135,15 @@ export function resolvePrebuiltAssetName(
 }
 
 /**
+ * Computes the lowercase SHA-256 hex digest of a file on disk.
+ */
+export function computeSha256(filePath: string): string {
+  const hash = crypto.createHash('sha256')
+  hash.update(fs.readFileSync(filePath))
+  return hash.digest('hex').toLowerCase()
+}
+
+/**
  * Downloads the prebuilt V binary for a tagged release and extracts it into
  * `installDir`. Returns `true` when a matching asset was found and extracted,
  * or `false` when no prebuilt is available (caller should build from source).
@@ -201,6 +220,30 @@ export async function downloadPrebuilt(
   const uniqueId = uuid()
   const archivePath = path.join(installDir, `${uniqueId}.zip`)
   await fs.promises.writeFile(archivePath, archiveData)
+
+  // Verify the integrity of the downloaded archive against a pinned checksum
+  // before extracting it (issue #32). A mismatch is treated as a potential
+  // tampering/corruption and the archive is rejected.
+  const expected = getExpectedChecksum(version, assetName)
+  if (expected) {
+    const actual = computeSha256(archivePath)
+    if (actual !== expected.toLowerCase()) {
+      await io.rmRF(archivePath)
+      throw new Error(
+        `Checksum verification failed for ${assetName} (${version}). ` +
+          `Expected ${expected.toLowerCase()}, got ${actual}. ` +
+          `The downloaded archive may be corrupted or tampered with; ` +
+          `refusing to extract it.`
+      )
+    }
+    core.info(`Verified checksum of ${assetName} (${version}): ${actual}`)
+  } else {
+    core.warning(
+      `No pinned checksum for ${assetName} (${version}); ` +
+        `the downloaded archive was NOT checksum-verified.`
+    )
+  }
+
   const extractPath = path.join(installDir, uniqueId)
   await io.mkdirP(extractPath)
   await toolCache.extractZip(archivePath, extractPath)
