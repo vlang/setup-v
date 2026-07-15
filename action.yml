@@ -26,7 +26,7 @@ inputs:
     description: 'Set this option if you want the action to use the stable version of V (latest GitHub release tag)'
     default: 'false'
   architecture:
-    description: 'Target architecture for V to use. Examples: linux, macos, windows. Will use system architecture by default.'
+    description: 'Target architecture for V to use. Examples: x86_64, arm64, aarch64, riscv64. Uses the system architecture by default.'
   path:
     description: 'Directory to install V into. Defaults to ~/vlang/vlang_{platform}_{arch}'
     default: ''
