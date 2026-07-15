@@ -28,13 +28,13 @@ export const KNOWN_PREBUILT_CHECKSUMS: Record<
     'v_linux.zip':
       '86caf9e70c3342d48ef19eb4f6c47b709f18c90ae86255520d5c29df6b482e23',
     'v_linux_arm64.zip':
-      '8c7fa683d34434b2c915a8b3bd5428ebdd5e42b934b277df662d060ee233e786',
+      '7e102f0ecc722bc59fea83ab1c99ae49c2f7be8f30abee9443220e452a439ed3',
     'v_macos_arm64.zip':
-      '226c96c63d8caa6909fc91a8026e8fbffa30264fec4dc0495b9e1536a98f6c7c',
+      'e539a8dc3aeea47267f3cf00c25c4f0a364d8037fb13f5379d2a574a7abac8ee',
     'v_macos_x86_64.zip':
-      '04918d73d41ae16ec49d5169ea737ea61c0e0bf28d023bd6661d06b708c806eb',
+      'de19ef02874aec502f091b75e504e4836da38f627ddf7f7f9ecf6e8cf262f9d0',
     'v_windows.zip':
-      '705bda7f87ccf1fbd24657a3d5767196c44a3d963ff647d7ca6d9beace2b619f'
+      '5f1d619b6b04a2b54b4ad21826a25bdcba2acf75a941c8f72fc95672b6b064ca'
   }
 }
 

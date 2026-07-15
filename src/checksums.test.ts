@@ -7,7 +7,7 @@ describe('checksums', () => {
       '0c35c79343b308e0415619d8e6d8da340c6a24c18331123553cc686ffb18abf4'
     )
     expect(getExpectedChecksum('0.5.2', 'v_windows.zip')).toBe(
-      '705bda7f87ccf1fbd24657a3d5767196c44a3d963ff647d7ca6d9beace2b619f'
+      '5f1d619b6b04a2b54b4ad21826a25bdcba2acf75a941c8f72fc95672b6b064ca'
     )
   })
 
