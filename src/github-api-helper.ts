@@ -8,8 +8,9 @@ import * as path from 'path'
 import * as retryHelper from './retry-helper'
 import * as toolCache from '@actions/tool-cache'
 import {getExpectedChecksum} from './checksums'
-export {getExpectedChecksum}
 import {v4 as uuid} from 'uuid'
+
+export {getExpectedChecksum}
 
 const IS_WINDOWS = process.platform === 'win32'
 
