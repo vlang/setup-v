@@ -2,7 +2,11 @@ import * as core from '@actions/core'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import {downloadRepository, getLatestRelease} from './github-api-helper'
+import {
+  downloadPrebuilt,
+  downloadRepository,
+  getLatestRelease
+} from './github-api-helper'
 import {execSync} from 'child_process'
 
 const VLANG_GITHUB_OWNER = 'vlang'
@@ -115,6 +119,31 @@ export async function getVlang({
     checkLatest,
     stable
   )
+
+  if (correctedRef) {
+    core.info(
+      `Attempting to install prebuilt vlang ${correctedRef} for ${process.platform}-${arch}...`
+    )
+    const gotPrebuilt = await downloadPrebuilt(
+      authToken,
+      VLANG_GITHUB_OWNER,
+      VLANG_GITHUB_REPO,
+      correctedRef,
+      process.platform,
+      arch,
+      installDir
+    )
+    if (gotPrebuilt && isVInstalled(installDir)) {
+      core.info(`Installed prebuilt vlang ${correctedRef}`)
+      if (clean) {
+        cleanInstallation(installDir)
+      }
+      return installDir
+    }
+    core.info(
+      `Prebuilt binary unavailable for ${process.platform}-${arch}; falling back to building from source`
+    )
+  }
 
   core.info(`Downloading vlang ${correctedRef || 'default branch'}...`)
 

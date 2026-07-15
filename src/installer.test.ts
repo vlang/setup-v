@@ -1,4 +1,4 @@
-import {describe, expect, test, vi, beforeEach, afterEach} from 'vitest'
+﻿import {describe, expect, test, vi, beforeEach, afterEach} from 'vitest'
 import * as cp from 'child_process'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -12,6 +12,7 @@ import {
   resolveVersionRef
 } from './installer'
 import * as githubApiHelper from './github-api-helper'
+import {resolvePrebuiltAssetName} from './github-api-helper'
 
 interface CommandError extends Error {
   stdout?: Buffer
@@ -21,6 +22,14 @@ interface CommandError extends Error {
 vi.mock('child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('child_process')>()
   return {...actual, execSync: vi.fn()}
+})
+
+vi.mock('./github-api-helper', async importOriginal => {
+  const actual = await importOriginal<typeof import('./github-api-helper')>()
+  return {
+    ...actual,
+    downloadPrebuilt: vi.fn()
+  }
 })
 
 describe('getVExecutable', () => {
@@ -349,3 +358,98 @@ describe('getVlang build failure handling', () => {
     expect(vi.mocked(cp.execSync)).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('resolvePrebuiltAssetName', () => {
+  test('maps windows x64 to v_windows.zip', () => {
+    expect(resolvePrebuiltAssetName('win32', 'x64')).toBe('v_windows.zip')
+  })
+
+  test('maps linux x64 and arm64', () => {
+    expect(resolvePrebuiltAssetName('linux', 'x64')).toBe('v_linux.zip')
+    expect(resolvePrebuiltAssetName('linux', 'arm64')).toBe('v_linux_arm64.zip')
+  })
+
+  test('maps darwin x64 and arm64', () => {
+    expect(resolvePrebuiltAssetName('darwin', 'x64')).toBe('v_macos_x86_64.zip')
+    expect(resolvePrebuiltAssetName('darwin', 'arm64')).toBe(
+      'v_macos_arm64.zip'
+    )
+  })
+
+  test('returns undefined when no prebuilt exists (windows arm64)', () => {
+    expect(resolvePrebuiltAssetName('win32', 'arm64')).toBeUndefined()
+  })
+})
+
+describe('getVlang prebuilt install', () => {
+  let tempDir = ''
+  let repoSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-v-prebuilt-'))
+    repoSpy = vi
+      .spyOn(githubApiHelper, 'downloadRepository')
+      .mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    if (tempDir) {
+      fs.rmSync(tempDir, {recursive: true, force: true})
+    }
+  })
+
+  test('uses the prebuilt binary and skips source build when available', async () => {
+    vi.mocked(githubApiHelper.downloadPrebuilt).mockImplementation(
+      async (_t, _o, _r, _v, _p, _a, installDir) => {
+        fs.mkdirSync(installDir as string, {recursive: true})
+        fs.writeFileSync(getVExecutable(installDir as string), '')
+        return true
+      }
+    )
+
+    const installDir = await getVlang({
+      authToken: 'token',
+      version: '0.5.1',
+      installPath: tempDir,
+      clean: false
+    })
+
+    expect(githubApiHelper.downloadPrebuilt).toHaveBeenCalled()
+    expect(repoSpy).not.toHaveBeenCalled()
+    expect(vi.mocked(cp.execSync)).not.toHaveBeenCalled()
+    expect(installDir).toBe(tempDir)
+  })
+
+  test('falls back to source build when no prebuilt is available', async () => {
+    vi.mocked(githubApiHelper.downloadPrebuilt).mockResolvedValue(false)
+    vi.mocked(cp.execSync).mockReturnValue(Buffer.from('build succeeded'))
+    // downloadRepository runs after getVlang's early cleanup, so it must
+    // (re)create the dir and a build script so buildV can run on any OS
+    vi.mocked(githubApiHelper.downloadRepository).mockImplementation(
+      async () => {
+        fs.mkdirSync(tempDir, {recursive: true})
+        fs.writeFileSync(path.join(tempDir, 'makev.bat'), '@echo off')
+        fs.writeFileSync(path.join(tempDir, 'make.bat'), '@echo off')
+      }
+    )
+
+    const installDir = await getVlang({
+      authToken: 'token',
+      version: '0.5.1',
+      installPath: tempDir,
+      clean: false
+    })
+
+    expect(githubApiHelper.downloadPrebuilt).toHaveBeenCalled()
+    expect(repoSpy).toHaveBeenCalled()
+    expect(vi.mocked(cp.execSync)).toHaveBeenCalled()
+    expect(installDir).toBe(tempDir)
+  })
+
+  test('resolvePrebuiltAssetName returns undefined for an unsupported platform', () => {
+    expect(resolvePrebuiltAssetName('freebsd', 'x64')).toBeUndefined()
+  })
+})
+
+

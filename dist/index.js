@@ -49575,6 +49575,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.downloadRepository = downloadRepository;
 exports.getLatestRelease = getLatestRelease;
+exports.resolvePrebuiltAssetName = resolvePrebuiltAssetName;
+exports.downloadPrebuilt = downloadPrebuilt;
 exports.getDefaultBranch = getDefaultBranch;
 const assert = __importStar(__nccwpck_require__(42613));
 const core = __importStar(__nccwpck_require__(37484));
@@ -49650,6 +49652,99 @@ async function getLatestRelease(authToken, owner, repo) {
     const result = response.data.tag_name;
     core.info(`Latest release '${result}'`);
     return result;
+}
+/**
+ * Maps a (platform, arch) pair to the name of V's prebuilt release asset.
+ *
+ * V publishes per-release assets named `v_<os>[_arch].zip`. Not every
+ * combination has a prebuilt (e.g. windows/arm64), in which case `undefined`
+ * is returned and the caller should fall back to building from source.
+ */
+function resolvePrebuiltAssetName(platform, arch) {
+    const map = {
+        'win32-x64': 'v_windows.zip',
+        'linux-x64': 'v_linux.zip',
+        'linux-arm64': 'v_linux_arm64.zip',
+        'darwin-arm64': 'v_macos_arm64.zip',
+        'darwin-x64': 'v_macos_x86_64.zip'
+    };
+    return map[`${platform}-${arch}`];
+}
+/**
+ * Downloads the prebuilt V binary for a tagged release and extracts it into
+ * `installDir`. Returns `true` when a matching asset was found and extracted,
+ * or `false` when no prebuilt is available (caller should build from source).
+ */
+async function downloadPrebuilt(authToken, owner, repo, version, platform, arch, installDir) {
+    const assetName = resolvePrebuiltAssetName(platform, arch);
+    if (!assetName) {
+        core.info(`No prebuilt binary for ${platform}-${arch}; falling back to source build`);
+        return false;
+    }
+    const octokit = github.getOctokit(authToken);
+    let assetId;
+    try {
+        const release = await octokit.rest.repos.getReleaseByTag({
+            owner,
+            repo,
+            tag: version
+        });
+        const asset = release.data.assets.find(a => a.name === assetName);
+        if (!asset) {
+            core.info(`Prebuilt asset ${assetName} not found for ${version}; falling back to source build`);
+            return false;
+        }
+        assetId = asset.id;
+    }
+    catch (err) {
+        core.info(`Could not resolve release ${version} (${String(err)}); falling back to source build`);
+        return false;
+    }
+    if (!fs.existsSync(installDir)) {
+        core.info(`Creating directory: ${installDir}`);
+        fs.mkdirSync(installDir, { recursive: true });
+    }
+    const archiveData = await retryHelper.execute(async () => {
+        core.info(`Downloading prebuilt ${assetName} for ${version}...`);
+        const response = await octokit.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+            owner,
+            repo,
+            asset_id: assetId,
+            headers: { Accept: 'application/octet-stream' }
+        });
+        const raw = response.data;
+        if (Buffer.isBuffer(raw)) {
+            return raw;
+        }
+        if (typeof raw === 'string') {
+            return Buffer.from(raw);
+        }
+        return Buffer.from(raw);
+    });
+    const uniqueId = (0, uuid_1.v4)();
+    const archivePath = path.join(installDir, `${uniqueId}.zip`);
+    await fs.promises.writeFile(archivePath, archiveData);
+    const extractPath = path.join(installDir, uniqueId);
+    await io.mkdirP(extractPath);
+    await toolCache.extractZip(archivePath, extractPath);
+    await io.rmRF(archivePath);
+    // V prebuilt zips wrap their contents in a single top-level folder (e.g. "v").
+    const archiveFileNames = await fs.promises.readdir(extractPath);
+    const topLevel = archiveFileNames.length === 1
+        ? path.join(extractPath, archiveFileNames[0])
+        : extractPath;
+    for (const fileName of await fs.promises.readdir(topLevel)) {
+        const sourcePath = path.join(topLevel, fileName);
+        const targetPath = path.join(installDir, fileName);
+        if (IS_WINDOWS) {
+            await io.cp(sourcePath, targetPath, { recursive: true });
+        }
+        else {
+            await io.mv(sourcePath, targetPath);
+        }
+    }
+    await io.rmRF(extractPath);
+    return true;
 }
 /**
  * Looks up the default branch name
@@ -49819,6 +49914,18 @@ async function getVlang({ authToken, version, checkLatest, stable, arch = os.arc
         fs.rmSync(installDir, { recursive: true, force: true });
     }
     const correctedRef = await resolveVersionRef(authToken, version, checkLatest, stable);
+    if (correctedRef) {
+        core.info(`Attempting to install prebuilt vlang ${correctedRef} for ${process.platform}-${arch}...`);
+        const gotPrebuilt = await (0, github_api_helper_1.downloadPrebuilt)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, correctedRef, process.platform, arch, installDir);
+        if (gotPrebuilt && isVInstalled(installDir)) {
+            core.info(`Installed prebuilt vlang ${correctedRef}`);
+            if (clean) {
+                cleanInstallation(installDir);
+            }
+            return installDir;
+        }
+        core.info(`Prebuilt binary unavailable for ${process.platform}-${arch}; falling back to building from source`);
+    }
     core.info(`Downloading vlang ${correctedRef || 'default branch'}...`);
     await (0, github_api_helper_1.downloadRepository)(authToken, VLANG_GITHUB_OWNER, VLANG_GITHUB_REPO, installDir, correctedRef);
     if (!fs.existsSync(vBinPath)) {
@@ -65196,6 +65303,24 @@ exports.StorageContextClient = StorageContextClient;
 
 /***/ }),
 
+/***/ 83627:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.KnownEncryptionAlgorithmType = void 0;
+/** Known values of {@link EncryptionAlgorithmType} that the service accepts. */
+var KnownEncryptionAlgorithmType;
+(function (KnownEncryptionAlgorithmType) {
+    KnownEncryptionAlgorithmType["AES256"] = "AES256";
+})(KnownEncryptionAlgorithmType || (exports.KnownEncryptionAlgorithmType = KnownEncryptionAlgorithmType = {}));
+//# sourceMappingURL=generatedModels.js.map
+
+/***/ }),
+
 /***/ 30247:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -75522,6 +75647,132 @@ exports.listType = {
 
 /***/ }),
 
+/***/ 56635:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=appendBlob.js.map
+
+/***/ }),
+
+/***/ 68355:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=blob.js.map
+
+/***/ }),
+
+/***/ 17188:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=blockBlob.js.map
+
+/***/ }),
+
+/***/ 15337:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=container.js.map
+
+/***/ }),
+
+/***/ 82354:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const tslib_1 = __nccwpck_require__(61860);
+tslib_1.__exportStar(__nccwpck_require__(26865), exports);
+tslib_1.__exportStar(__nccwpck_require__(15337), exports);
+tslib_1.__exportStar(__nccwpck_require__(68355), exports);
+tslib_1.__exportStar(__nccwpck_require__(14400), exports);
+tslib_1.__exportStar(__nccwpck_require__(56635), exports);
+tslib_1.__exportStar(__nccwpck_require__(17188), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 14400:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=pageBlob.js.map
+
+/***/ }),
+
+/***/ 26865:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * Code generated by Microsoft (R) AutoRest Code Generator.
+ * Changes may cause incorrect behavior and will be lost if the code is regenerated.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=service.js.map
+
+/***/ }),
+
 /***/ 40535:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -78737,132 +78988,6 @@ const filterBlobsOperationSpec = {
 
 /***/ }),
 
-/***/ 56635:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=appendBlob.js.map
-
-/***/ }),
-
-/***/ 68355:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=blob.js.map
-
-/***/ }),
-
-/***/ 17188:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=blockBlob.js.map
-
-/***/ }),
-
-/***/ 15337:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=container.js.map
-
-/***/ }),
-
-/***/ 82354:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const tslib_1 = __nccwpck_require__(61860);
-tslib_1.__exportStar(__nccwpck_require__(26865), exports);
-tslib_1.__exportStar(__nccwpck_require__(15337), exports);
-tslib_1.__exportStar(__nccwpck_require__(68355), exports);
-tslib_1.__exportStar(__nccwpck_require__(14400), exports);
-tslib_1.__exportStar(__nccwpck_require__(56635), exports);
-tslib_1.__exportStar(__nccwpck_require__(17188), exports);
-//# sourceMappingURL=index.js.map
-
-/***/ }),
-
-/***/ 14400:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=pageBlob.js.map
-
-/***/ }),
-
-/***/ 26865:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License.
- *
- * Code generated by Microsoft (R) AutoRest Code Generator.
- * Changes may cause incorrect behavior and will be lost if the code is regenerated.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-//# sourceMappingURL=service.js.map
-
-/***/ }),
-
 /***/ 5313:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -78933,24 +79058,6 @@ class StorageClient extends coreHttpCompat.ExtendedServiceClient {
 }
 exports.StorageClient = StorageClient;
 //# sourceMappingURL=storageClient.js.map
-
-/***/ }),
-
-/***/ 83627:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.KnownEncryptionAlgorithmType = void 0;
-/** Known values of {@link EncryptionAlgorithmType} that the service accepts. */
-var KnownEncryptionAlgorithmType;
-(function (KnownEncryptionAlgorithmType) {
-    KnownEncryptionAlgorithmType["AES256"] = "AES256";
-})(KnownEncryptionAlgorithmType || (exports.KnownEncryptionAlgorithmType = KnownEncryptionAlgorithmType = {}));
-//# sourceMappingURL=generatedModels.js.map
 
 /***/ }),
 
