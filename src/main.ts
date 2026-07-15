@@ -25,7 +25,7 @@ async function run(): Promise<void> {
     // if we don't throw a warning, the already installed x64 node will be used which is not probably what user meant.
     if (arch && !version) {
       core.warning(
-        '`architecture` is provided but `version` is missing. In this configuration, the version/architecture of V will not be changed. To fix this, provide `architecture` in combination with `version`'
+        '`architecture` is provided but `version` is missing. In this configuration, the version/architecture of Node will not be changed. To fix this, provide `architecture` in combination with `version`'
       )
     }
 
@@ -91,7 +91,18 @@ async function run(): Promise<void> {
 }
 
 export async function cleanup(): Promise<void> {
-  // @todo: implement
+  // The post-job step is documented to remove the PAT configured for this
+  // action. Best-effort: drop any git extraheader that may carry the token,
+  // and clear the GITHUB_TOKEN variable so later steps cannot reuse it.
+  try {
+    cp.execSync(
+      'git config --global --unset-all http.https://github.com/.extraheader',
+      {stdio: 'ignore'}
+    )
+  } catch {
+    // No extraheader was set (or git is unavailable) — nothing to clean up.
+  }
+  core.exportVariable('GITHUB_TOKEN', '')
 }
 
 function resolveVersionInput(): string {
