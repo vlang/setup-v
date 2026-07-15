@@ -369,6 +369,17 @@ describe('resolvePrebuiltAssetName', () => {
     expect(resolvePrebuiltAssetName('linux', 'arm64')).toBe('v_linux_arm64.zip')
   })
 
+  test('normalizes architecture aliases (x86_64/aarch64) from the action input', () => {
+    expect(resolvePrebuiltAssetName('linux', 'x86_64')).toBe('v_linux.zip')
+    expect(resolvePrebuiltAssetName('linux', 'aarch64')).toBe(
+      'v_linux_arm64.zip'
+    )
+    expect(resolvePrebuiltAssetName('win32', 'x86_64')).toBe('v_windows.zip')
+    expect(resolvePrebuiltAssetName('darwin', 'aarch64')).toBe(
+      'v_macos_arm64.zip'
+    )
+  })
+
   test('maps darwin x64 and arm64', () => {
     expect(resolvePrebuiltAssetName('darwin', 'x64')).toBe('v_macos_x86_64.zip')
     expect(resolvePrebuiltAssetName('darwin', 'arm64')).toBe(

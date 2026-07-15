@@ -49661,6 +49661,9 @@ async function getLatestRelease(authToken, owner, repo) {
  * is returned and the caller should fall back to building from source.
  */
 function resolvePrebuiltAssetName(platform, arch) {
+    // Normalize architecture aliases used by the action's `architecture` input
+    // (e.g. "x86_64") to the values reported by os.arch() (e.g. "x64").
+    const normArch = arch === 'x86_64' ? 'x64' : arch === 'aarch64' ? 'arm64' : arch;
     const map = {
         'win32-x64': 'v_windows.zip',
         'linux-x64': 'v_linux.zip',
@@ -49668,7 +49671,7 @@ function resolvePrebuiltAssetName(platform, arch) {
         'darwin-arm64': 'v_macos_arm64.zip',
         'darwin-x64': 'v_macos_x86_64.zip'
     };
-    return map[`${platform}-${arch}`];
+    return map[`${platform}-${normArch}`];
 }
 /**
  * Downloads the prebuilt V binary for a tagged release and extracts it into
