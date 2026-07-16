@@ -1,5 +1,15 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import * as cp from 'child_process'
+
+const {mockFsExistsSync, mockFsReadFileSync} = vi.hoisted(() => ({
+  mockFsExistsSync: vi.fn(() => false),
+  mockFsReadFileSync: vi.fn(() => '')
+}))
+
+vi.mock('fs', () => ({
+  existsSync: mockFsExistsSync,
+  readFileSync: mockFsReadFileSync
+}))
 
 type ExecCb = (err: Error | null, res?: {stdout: string; stderr: string}) => void
 
@@ -25,7 +35,8 @@ vi.mock('./state-helper', () => ({IS_POST: true}))
 vi.mock('child_process', () => ({
   exec: vi.fn((_cmd: string, cb: ExecCb) =>
     cb(null, {stdout: 'V 0.4.4 abc123', stderr: ''})
-  )
+  ),
+  execSync: vi.fn()
 }))
 
 import * as core from '@actions/core'
@@ -77,6 +88,8 @@ describe('getVersion', () => {
 describe('resolveVersionInput', () => {
   beforeEach(() => {
     getInputMock.mockImplementation(() => '')
+    mockFsExistsSync.mockReturnValue(false)
+    mockFsReadFileSync.mockReturnValue('')
   })
   it('returns the explicit version', async () => {
     getInputMock.mockImplementation((name: string) =>
@@ -85,16 +98,12 @@ describe('resolveVersionInput', () => {
     expect(await resolveVersionInput()).toBe('0.5.1')
   })
   it('reads the version from a version-file', async () => {
-    const fs = await import('fs')
-    const os = await import('os')
-    const path = await import('path')
-    const tmp = path.join(os.tmpdir(), `vver-${Date.now()}.txt`)
-    fs.writeFileSync(tmp, 'weekly.2024.06\n')
+    mockFsExistsSync.mockReturnValueOnce(true)
+    mockFsReadFileSync.mockReturnValueOnce('weekly.2024.06\n')
     getInputMock.mockImplementation((name: string) =>
-      name === 'version-file' ? tmp : ''
+      name === 'version-file' ? '.v-version' : ''
     )
     expect(await resolveVersionInput()).toBe('weekly.2024.06')
-    fs.unlinkSync(tmp)
   })
 })
 
@@ -104,6 +113,8 @@ describe('run', () => {
       cb(null, {stdout: 'V 0.4.4 abc123', stderr: ''})
     )
     getInputMock.mockImplementation(() => '')
+    mockFsExistsSync.mockReturnValue(false)
+    mockFsReadFileSync.mockReturnValue('')
     restoreCacheMock.mockClear()
   })
   it('restores the cache with a key prefixed by v-<version>', async () => {
