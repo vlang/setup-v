@@ -20,22 +20,31 @@ on:
 jobs:
   check-dist:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v7
+        id: uses_checkout_v7
 
       - name: Setup Node
+        id: setup_node
+        if: ${{ !cancelled() && steps.uses_checkout_v7.outcome == 'success' }}
         uses: actions/setup-node@v7
         with:
           node-version: 24
 
       - name: Install dependencies
+        id: install_dependencies
+        if: ${{ !cancelled() && steps.setup_node.outcome == 'success' }}
         run: npm ci
 
       - name: Rebuild the index.js file
+        id: rebuild_the_index_js_file
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: npm run build
 
       - name: Compare the expected and actual dist/ directories
+        if: ${{ !cancelled() && steps.rebuild_the_index_js_file.outcome == 'success' }}
         id: diff
         run: |
           if [ "$(git diff --ignore-space-at-eol dist/ | wc -l)" -gt "0" ]; then
