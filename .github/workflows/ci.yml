@@ -12,27 +12,41 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+        id: uses_checkout_v7
 
       - uses: actions/setup-node@v7
+        id: uses_setup_node_v7
+        if: ${{ success() && !cancelled() && steps.uses_checkout_v7.outcome == 'success' }}
         with:
           node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
+        id: install_dependencies
+        if: ${{ success() && !cancelled() && steps.uses_setup_node_v7.outcome == 'success' }}
         run: npm ci
 
       - name: Lint check
+        id: lint_check
+        if: ${{ success() && !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: npm run lint
 
       - name: Test
+        id: test
+        if: ${{ success() && !cancelled() && steps.lint_check.outcome == 'success' }}
         run: npm run test
 
       - name: Build
+        id: build
+        if: ${{ success() && !cancelled() && steps.test.outcome == 'success' }}
         run: npm run build
 
       - uses: actions/upload-artifact@v7
+        id: uses_upload_artifact_v7
+        if: ${{ success() && !cancelled() && steps.build.outcome == 'success' }}
         with:
           name: build-output
           path: lib/
@@ -52,11 +66,15 @@ jobs:
           - cache-false
           - clean-false
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     continue-on-error: ${{ matrix.os == 'macos-latest' && matrix.scenario == 'clean-false' }}
     steps:
       - uses: actions/checkout@v7
+        id: uses_checkout_v7
 
       - uses: actions/download-artifact@v8
+        id: uses_download_artifact_v8
+        if: ${{ success() && !cancelled() && steps.uses_checkout_v7.outcome == 'success' }}
         with:
           name: build-output
           path: lib/
@@ -123,4 +141,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test if the executable is available
+        id: test_if_the_executable_is_available
+        if: ${{ success() && !cancelled() && steps.uses_download_artifact_v8.outcome == 'success' }}
         run: v version
