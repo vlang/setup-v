@@ -19,34 +19,34 @@ jobs:
 
       - uses: actions/setup-node@v7
         id: uses_setup_node_v7
-        if: ${{ !cancelled() && steps.uses_checkout_v7.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.uses_checkout_v7.outcome == 'success' }}
         with:
           node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
         id: install_dependencies
-        if: ${{ !cancelled() && steps.uses_setup_node_v7.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.uses_setup_node_v7.outcome == 'success' }}
         run: npm ci
 
       - name: Lint check
         id: lint_check
-        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: npm run lint
 
       - name: Test
         id: test
-        if: ${{ !cancelled() && steps.lint_check.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.lint_check.outcome == 'success' }}
         run: npm run test
 
       - name: Build
         id: build
-        if: ${{ !cancelled() && steps.test.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.test.outcome == 'success' }}
         run: npm run build
 
       - uses: actions/upload-artifact@v7
         id: uses_upload_artifact_v7
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.build.outcome == 'success' }}
         with:
           name: build-output
           path: lib/
@@ -74,7 +74,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         id: uses_download_artifact_v8
-        if: ${{ !cancelled() && steps.uses_checkout_v7.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.uses_checkout_v7.outcome == 'success' }}
         with:
           name: build-output
           path: lib/
@@ -142,5 +142,5 @@ jobs:
 
       - name: Test if the executable is available
         id: test_if_the_executable_is_available
-        if: ${{ !cancelled() && steps.uses_download_artifact_v8.outcome == 'success' }}
+        if: ${{ success() && !cancelled() && steps.uses_download_artifact_v8.outcome == 'success' }}
         run: v version
